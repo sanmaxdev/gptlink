@@ -43,7 +43,7 @@ class CodexAppServer:
                 "clientInfo": {
                     "name": "gptlink",
                     "title": "GPTLink Image Gateway",
-                    "version": "0.1.0",
+                    "version": "0.3.0",
                 }
             },
         )
@@ -123,4 +123,3 @@ async def tolerate_codex_failure(operation: Awaitable[dict[str, Any]]) -> dict[s
         return await operation
     except (CodexRpcError, TimeoutError, OSError) as exc:
         return {"error": str(exc)}
-

@@ -123,7 +123,10 @@ Open `http://127.0.0.1:8787` locally. Do not add `/api/*` or `/` to the public C
 
 ## 8. Connect Hermes
 
-Follow [HERMES.md](HERMES.md). Use `https://YOUR_REAL_DOMAIN/v1` as the base URL and the dedicated Hermes key.
+Follow [HERMES.md](HERMES.md). When Hermes runs on the same VPS, prefer the
+autonomous user-space setup in that guide: Hermes keeps GPTLink on localhost,
+initiates device login, manages its own internal API key, and does not require
+the public Caddy deployment described above.
 
 ## Operations
 

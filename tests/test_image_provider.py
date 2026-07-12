@@ -1,6 +1,18 @@
+import base64
+import json
+import time
 from pathlib import Path
 
 from gptlink.image_provider import CodexImageProvider
+
+
+def jwt_with_exp(expires: int, *, plan: str = "plus") -> str:
+    header = base64.urlsafe_b64encode(b'{}').decode().rstrip("=")
+    payload = base64.urlsafe_b64encode(json.dumps({
+        "exp": expires,
+        "https://api.openai.com/auth": {"chatgpt_plan_type": plan},
+    }).encode()).decode().rstrip("=")
+    return f"{header}.{payload}.signature"
 
 
 def test_payload_requires_image_tool() -> None:
@@ -93,3 +105,56 @@ def test_sse_parser_preserves_event_type() -> None:
 
     assert events[0]["type"] == "response.image_generation_call.partial_image"
     assert events[0]["partial_image_b64"] == "aGVsbG8="
+
+
+def test_reuses_fresh_hermes_codex_auth_without_copying(tmp_path: Path) -> None:
+    codex_home = tmp_path / "codex"
+    hermes_home = tmp_path / "hermes"
+    hermes_home.mkdir()
+    token = jwt_with_exp(int(time.time()) + 3600)
+    (hermes_home / "auth.json").write_text(json.dumps({
+        "providers": {"openai-codex": {"tokens": {"access_token": token}}}
+    }))
+    provider = CodexImageProvider(
+        codex_home=codex_home, hermes_home=hermes_home, image_dir=tmp_path
+    )
+
+    assert provider.auth_source() == "hermes"
+    assert provider._read_access_token() == token
+    assert not (codex_home / "auth.json").exists()
+
+
+def test_prefers_codex_cli_auth_over_hermes_auth(tmp_path: Path) -> None:
+    codex_home = tmp_path / "codex"
+    hermes_home = tmp_path / "hermes"
+    codex_home.mkdir()
+    hermes_home.mkdir()
+    codex_token = jwt_with_exp(int(time.time()) + 3600)
+    hermes_token = jwt_with_exp(int(time.time()) + 7200)
+    (codex_home / "auth.json").write_text(json.dumps({"tokens": {"access_token": codex_token}}))
+    (hermes_home / "auth.json").write_text(json.dumps({
+        "providers": {"openai-codex": {"tokens": {"access_token": hermes_token}}}
+    }))
+    provider = CodexImageProvider(
+        codex_home=codex_home, hermes_home=hermes_home, image_dir=tmp_path
+    )
+
+    assert provider.auth_source() == "codex_cli"
+    assert provider._read_access_token() == codex_token
+
+
+def test_ignores_expired_hermes_token_and_uses_pool_fallback(tmp_path: Path) -> None:
+    hermes_home = tmp_path / "hermes"
+    hermes_home.mkdir()
+    expired = jwt_with_exp(int(time.time()) - 60)
+    pooled = jwt_with_exp(int(time.time()) + 3600)
+    (hermes_home / "auth.json").write_text(json.dumps({
+        "providers": {"openai-codex": {"tokens": {"access_token": expired}}},
+        "credential_pool": {"openai-codex": [{"access_token": pooled, "last_status": "ok"}]},
+    }))
+    provider = CodexImageProvider(
+        codex_home=tmp_path / "codex", hermes_home=hermes_home, image_dir=tmp_path
+    )
+
+    assert provider.auth_source() == "hermes"
+    assert provider._read_access_token() == pooled

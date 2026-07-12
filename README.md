@@ -51,17 +51,27 @@ available through an SSH tunnel.
 
 ## Connect Hermes
 
-Install the included skill after this repository is public:
+If Hermes already runs on the Ubuntu VPS, install the skill:
 
 ```bash
 hermes skills install sanmaxdev/gptlink/skills/gptlink-image
-hermes config set GPTLINK_API_KEY 'gptlink_...'
-hermes config set skills.config.gptlink.base_url 'https://images.example.com/v1'
 ```
 
-Then ask: `/gptlink-image Create a cinematic 16:9 image of a city in the rain`.
-See [docs/HERMES.md](docs/HERMES.md) for setup, reference-image use, and direct
-API examples.
+Then tell Hermes:
+
+```text
+/gptlink-image Set up GPTLink on this VPS and connect my Codex account.
+```
+
+Hermes handles the clone, virtual environment, dependencies, private server,
+GPTLink API key, and local configuration. If Hermes or Codex CLI already has a
+fresh OpenAI-Codex session, GPTLink reuses it read-only. Otherwise Hermes gives
+you an OpenAI verification link and one-time device code. Open the link, enter
+the code, approve access, and reply `done`; Hermes completes setup and can
+generate images immediately. You do not copy API keys or run GPTLink commands.
+
+See [docs/HERMES.md](docs/HERMES.md) for the complete autonomous flow,
+reference-image use, updates, recovery, and security behavior.
 
 ## API
 

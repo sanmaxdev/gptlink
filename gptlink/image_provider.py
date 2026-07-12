@@ -5,6 +5,7 @@ import json
 import math
 import mimetypes
 import re
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -46,8 +47,9 @@ class GeneratedImage:
 
 
 class CodexImageProvider:
-    def __init__(self, *, codex_home: Path, image_dir: Path) -> None:
+    def __init__(self, *, codex_home: Path, image_dir: Path, hermes_home: Path | None = None) -> None:
         self.codex_home = codex_home
+        self.hermes_home = hermes_home or Path.home() / ".hermes"
         self.image_dir = image_dir
 
     def generate(
@@ -170,15 +172,79 @@ class CodexImageProvider:
         yield {"type": "completed", "image": generated}
 
     def _read_access_token(self) -> str:
-        auth_path = self.codex_home / "auth.json"
+        token = self._codex_cli_access_token() or self._hermes_access_token()
+        if not token:
+            raise RuntimeError("No fresh ChatGPT/Codex authentication was found in Codex CLI or Hermes")
+        return token
+
+    @staticmethod
+    def _jwt_claims(token: str) -> dict[str, Any]:
         try:
-            auth = json.loads(auth_path.read_text(encoding="utf-8"))
-            token = auth.get("tokens", {}).get("access_token")
-        except (OSError, json.JSONDecodeError) as exc:
-            raise RuntimeError("Codex authentication could not be read") from exc
-        if not isinstance(token, str) or not token.strip():
-            raise RuntimeError("Not logged into ChatGPT/Codex")
-        return token.strip()
+            segment = token.split(".")[1]
+            segment += "=" * (-len(segment) % 4)
+            value = json.loads(base64.urlsafe_b64decode(segment))
+            return value if isinstance(value, dict) else {}
+        except (IndexError, ValueError, json.JSONDecodeError):
+            return {}
+
+    @classmethod
+    def _fresh_token(cls, value: Any) -> str | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        token = value.strip()
+        expires = cls._jwt_claims(token).get("exp")
+        if isinstance(expires, (int, float)) and expires <= time.time() + 60:
+            return None
+        return token
+
+    @staticmethod
+    def _read_json(path: Path) -> dict[str, Any]:
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+            return value if isinstance(value, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def _codex_cli_access_token(self) -> str | None:
+        auth = self._read_json(self.codex_home / "auth.json")
+        return self._fresh_token((auth.get("tokens") or {}).get("access_token"))
+
+    def _hermes_access_token(self) -> str | None:
+        auth = self._read_json(self.hermes_home / "auth.json")
+        provider = (auth.get("providers") or {}).get("openai-codex") or {}
+        token = self._fresh_token((provider.get("tokens") or {}).get("access_token"))
+        if token:
+            return token
+        pool = (auth.get("credential_pool") or {}).get("openai-codex") or []
+        for entry in pool if isinstance(pool, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            reset_at = entry.get("last_error_reset_at")
+            if isinstance(reset_at, (int, float)) and reset_at > time.time():
+                continue
+            if entry.get("last_status") in {"quarantined", "invalid"}:
+                continue
+            token = self._fresh_token(entry.get("access_token"))
+            if token:
+                return token
+        return None
+
+    def auth_source(self) -> str | None:
+        if self._codex_cli_access_token():
+            return "codex_cli"
+        if self._hermes_access_token():
+            return "hermes"
+        return None
+
+    def auth_summary(self) -> dict[str, Any]:
+        token = self._codex_cli_access_token() or self._hermes_access_token() or ""
+        claims = self._jwt_claims(token)
+        auth_claims = claims.get("https://api.openai.com/auth") or {}
+        return {
+            "type": "chatgpt",
+            "planType": auth_claims.get("chatgpt_plan_type") or "unknown",
+            "source": self.auth_source(),
+        }
 
     @staticmethod
     def resolve_quality(model: str, quality: str) -> str:

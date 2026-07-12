@@ -25,7 +25,11 @@ logger = logging.getLogger(__name__)
 
 database = Database(settings.database_path)
 codex = CodexAppServer()
-image_provider = CodexImageProvider(codex_home=settings.codex_home, image_dir=settings.image_dir)
+image_provider = CodexImageProvider(
+    codex_home=settings.codex_home,
+    hermes_home=settings.hermes_home,
+    image_dir=settings.image_dir,
+)
 generation_lock = asyncio.Semaphore(2)
 
 
@@ -43,7 +47,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="GPTLink",
-    version="0.2.0",
+    version="0.3.0",
     description="Local GPT Image 2 API gateway backed by ChatGPT/Codex auth.",
     lifespan=lifespan,
 )
@@ -86,6 +90,8 @@ def require_api_key(authorization: Annotated[str | None, Header()] = None) -> No
 
 
 async def refresh_codex_auth() -> dict[str, Any]:
+    if image_provider.auth_source() == "hermes":
+        return {"account": image_provider.auth_summary()}
     if not codex.process or codex.process.returncode is not None:
         await codex.start()
     return await codex.request("account/read", {"refreshToken": True})
@@ -239,6 +245,11 @@ async def get_status() -> dict[str, Any]:
         tolerate_codex_failure(codex.request("account/rateLimits/read", {})),
         tolerate_codex_failure(codex.request("account/usage/read", {})),
     )
+    auth_source = image_provider.auth_source()
+    if auth_source and account.get("account"):
+        account = {**account, "account": {**account["account"], "source": auth_source}}
+    elif auth_source == "hermes":
+        account = {"account": image_provider.auth_summary()}
     return {
         "codex": account,
         "rate_limits": limits,

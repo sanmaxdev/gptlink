@@ -13,6 +13,17 @@ import urllib.request
 import uuid
 
 
+def managed_config() -> dict:
+    path = pathlib.Path(os.environ.get(
+        "GPTLINK_CONFIG_FILE", pathlib.Path.home() / ".config/gptlink/hermes.json"
+    ))
+    try:
+        value = json.loads(path.read_text())
+        return value if isinstance(value, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
 def request(url: str, key: str, data: bytes, content_type: str) -> dict:
     req = urllib.request.Request(url, data=data, method="POST", headers={
         "Authorization": f"Bearer {key}", "Content-Type": content_type,
@@ -49,10 +60,11 @@ def main() -> None:
     parser.add_argument("--output", default="gptlink-output.png")
     args = parser.parse_args()
 
-    base_url = os.environ.get("GPTLINK_BASE_URL", "").rstrip("/")
-    key = os.environ.get("GPTLINK_API_KEY", "")
+    config = managed_config()
+    base_url = os.environ.get("GPTLINK_BASE_URL", str(config.get("base_url", ""))).rstrip("/")
+    key = os.environ.get("GPTLINK_API_KEY", str(config.get("api_key", "")))
     if not base_url or not key:
-        raise SystemExit("Set GPTLINK_BASE_URL and GPTLINK_API_KEY")
+        raise SystemExit("GPTLink is not configured. Run gptlink_operator.py setup first")
 
     references = [pathlib.Path(path).expanduser().resolve() for path in args.reference]
     if any(not path.is_file() for path in references):

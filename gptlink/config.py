@@ -12,6 +12,7 @@ class Settings:
     image_dir: Path
     database_path: Path
     codex_home: Path
+    hermes_home: Path
     host: str
     port: int
 
@@ -22,12 +23,16 @@ class Settings:
         codex_home = Path(
             os.environ.get("CODEX_HOME", Path.home() / ".codex")
         ).resolve()
+        hermes_home = Path(
+            os.environ.get("HERMES_HOME", Path.home() / ".hermes")
+        ).resolve()
         return cls(
             root_dir=root_dir,
             data_dir=data_dir,
             image_dir=data_dir / "images",
             database_path=data_dir / "gptlink.db",
             codex_home=codex_home,
+            hermes_home=hermes_home,
             host=os.environ.get("GPTLINK_HOST", "127.0.0.1"),
             port=int(os.environ.get("GPTLINK_PORT", "8787")),
         )
@@ -38,4 +43,3 @@ class Settings:
 
 
 settings = Settings.load()
-
