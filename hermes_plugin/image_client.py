@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate or edit images through GPTLink using only the Python standard library."""
+"""Generate or edit images through the plugin-managed GPTLink service."""
 
 from __future__ import annotations
 

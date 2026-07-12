@@ -1,4 +1,4 @@
 interface:
-  display_name: "GPTLink Autonomous Images"
-  short_description: "Install, authenticate, manage, and create images"
-  default_prompt: "Use $gptlink-image to set up GPTLink autonomously, reuse my existing Codex authentication when possible, and generate an image."
+  display_name: "GPTLink Images"
+  short_description: "Operate GPTLink through its enabled plugin"
+  default_prompt: "Use $gptlink-image with the GPTLink plugin tools to set up the gateway and generate an image."

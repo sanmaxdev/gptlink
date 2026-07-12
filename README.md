@@ -51,11 +51,15 @@ available through an SSH tunnel.
 
 ## Connect Hermes
 
-If Hermes already runs on the Ubuntu VPS, install the skill:
+GPTLink uses an explicitly enabled Hermes plugin for executable and authentication
+logic. Install it from the VPS shell:
 
 ```bash
-hermes skills install sanmaxdev/gptlink/skills/gptlink-image
+hermes plugins install sanmaxdev/gptlink --enable
 ```
+
+Restart the Hermes gateway or begin a new Hermes process so the two tools
+`gptlink_manage` and `gptlink_generate` are loaded.
 
 Then tell Hermes:
 
@@ -70,8 +74,10 @@ you an OpenAI verification link and one-time device code. Open the link, enter
 the code, approve access, and reply `done`; Hermes completes setup and can
 generate images immediately. You do not copy API keys or run GPTLink commands.
 
-See [docs/HERMES.md](docs/HERMES.md) for the complete autonomous flow,
-reference-image use, updates, recovery, and security behavior.
+Do not install `skills/gptlink-image` directly. It is a bundled, scanner-safe
+workflow registered by the plugin. See [docs/HERMES.md](docs/HERMES.md) for the
+complete autonomous flow, reference-image use, updates, recovery, and security
+behavior.
 
 ## API
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Autonomous user-space installer and lifecycle manager for GPTLink on Linux."""
+"""Autonomous user-space lifecycle manager for the GPTLink plugin."""
 
 from __future__ import annotations
 

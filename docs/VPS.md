@@ -124,8 +124,10 @@ Open `http://127.0.0.1:8787` locally. Do not add `/api/*` or `/` to the public C
 ## 8. Connect Hermes
 
 Follow [HERMES.md](HERMES.md). When Hermes runs on the same VPS, prefer the
-autonomous user-space setup in that guide: Hermes keeps GPTLink on localhost,
-initiates device login, manages its own internal API key, and does not require
+explicitly enabled plugin in that guide: install it with
+`hermes plugins install sanmaxdev/gptlink --enable`. The plugin keeps GPTLink
+on localhost, reuses existing authentication when available, initiates device
+login only when needed, and manages its internal API key. It does not require
 the public Caddy deployment described above.
 
 ## Operations

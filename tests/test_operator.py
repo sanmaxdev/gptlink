@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def load_operator():
-    path = Path(__file__).parents[1] / "skills/gptlink-image/scripts/gptlink_operator.py"
+    path = Path(__file__).parents[1] / "hermes_plugin/lifecycle.py"
     spec = importlib.util.spec_from_file_location("gptlink_operator_test", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
