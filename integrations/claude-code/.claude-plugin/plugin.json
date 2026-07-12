@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "gptlink",
+  "displayName": "GPTLink Images",
+  "version": "1.0.0",
+  "description": "Generate and edit images using a local GPTLink MCP server.",
+  "author": {"name": "sanmaxdev"},
+  "repository": "https://github.com/sanmaxdev/gptlink",
+  "license": "MIT",
+  "keywords": ["images", "mcp", "gptlink", "codex"]
+}

@@ -19,6 +19,8 @@ GPT Image 2 portions of the Images API plus a focused Responses API bridge.
 - PNG, JPEG, WebP, multiple outputs, partial images, and SSE streaming
 - A minimal local dashboard and image history
 - Linux VPS operation behind HTTPS without exposing management routes
+- Native MCP tools for Claude Code, Antigravity, Codex, and generic MCP clients
+- One installer that merges agent configuration and installs the image skill
 
 ## Start on Windows
 
@@ -79,6 +81,29 @@ workflow registered by the plugin. See [docs/HERMES.md](docs/HERMES.md) for the
 complete autonomous flow, reference-image use, updates, recovery, and security
 behavior.
 
+## Connect Claude Code, Antigravity, Codex, and other agents
+
+GPTLink includes a native MCP server over local stdio and authenticated
+Streamable HTTP. Install every supported local agent in one command:
+
+```bash
+python scripts/install-agent.py --agent all --scope user --mode local
+```
+
+Or connect one agent to a hosted GPTLink service:
+
+```bash
+export GPTLINK_API_KEY='gptlink_your_agent_key'
+python scripts/install-agent.py --agent claude-code --scope user --mode remote \
+  --url https://images.example.com
+```
+
+Available MCP tools are `gptlink_status`, `gptlink_models`,
+`gptlink_generate`, `gptlink_edit`, `gptlink_variation`, and
+`gptlink_history`. See [docs/AGENTS.md](docs/AGENTS.md) for complete Claude Code,
+Antigravity, Codex, generic MCP, local/remote, reference-image, and security
+instructions.
+
 ## API
 
 Create a `gptlink_...` key in the dashboard, then call:
@@ -111,6 +136,7 @@ Endpoints:
 - `GET /v1/models`
 - `GET /api/status`
 - `GET /health`
+- `POST /mcp/` (MCP Streamable HTTP; accepts the same Bearer key)
 
 Supported image aliases are `gpt-image-2-low`, `gpt-image-2-medium`,
 `gpt-image-2-high`, and `gpt-image-2-auto`.

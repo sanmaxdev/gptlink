@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "gptlink": {
+      "command": "/opt/gptlink/.venv/bin/python",
+      "args": ["-m", "gptlink.mcp_server", "--transport", "stdio"],
+      "cwd": "/opt/gptlink"
+    }
+  }
+}

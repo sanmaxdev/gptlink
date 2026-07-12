@@ -43,7 +43,7 @@ class CodexAppServer:
                 "clientInfo": {
                     "name": "gptlink",
                     "title": "GPTLink Image Gateway",
-                    "version": "0.3.0",
+                    "version": "0.4.0",
                 }
             },
         )

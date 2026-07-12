@@ -10,7 +10,7 @@ Hermes -> HTTPS + GPTLink API key -> Caddy -> 127.0.0.1:8787 -> Codex session
                                             SQLite + images
 ```
 
-Caddy exposes only `/v1/*`, `/files/*`, and `/health`. Management endpoints and the dashboard remain private.
+Caddy exposes only `/v1/*`, authenticated `/mcp`, `/files/*`, and `/health`. Management endpoints and the dashboard remain private.
 
 ## 1. Prepare DNS and firewall
 
@@ -33,7 +33,11 @@ cd gptlink
 sudo bash scripts/install-vps.sh
 ```
 
-The installer creates a locked-down `gptlink` system user, installs Python and the Codex CLI, creates `/opt/gptlink/.venv`, stores state in `/var/lib/gptlink`, and installs the systemd unit. Review `/etc/gptlink.env` if you need different paths or a different local port.
+The installer creates a locked-down `gptlink` system user, installs Python and the Codex CLI, creates `/opt/gptlink/.venv`, stores state in `/var/lib/gptlink`, and installs the systemd unit. Review `/etc/gptlink.env` if you need different paths or a different local port. For a public MCP endpoint, set its real origin before starting:
+
+```bash
+sudo sed -i 's#GPTLINK_PUBLIC_BASE_URL=.*#GPTLINK_PUBLIC_BASE_URL=https://YOUR_REAL_DOMAIN#' /etc/gptlink.env
+```
 
 ## 3. Authenticate the Codex account
 
@@ -130,6 +134,15 @@ on localhost, reuses existing authentication when available, initiates device
 login only when needed, and manages its internal API key. It does not require
 the public Caddy deployment described above.
 
+## 9. Connect Claude Code, Antigravity, Codex, and MCP clients
+
+Use [AGENTS.md](AGENTS.md) for the universal installer, local/remote selection,
+per-agent keys, reference-image behavior, manual configurations, and tool examples.
+
+For a remote agent, create a dedicated key and configure
+`https://YOUR_REAL_DOMAIN/mcp/`. Never reuse the Codex OAuth credential as a
+client key.
+
 ## Operations
 
 Logs:
@@ -157,6 +170,7 @@ Backup `/var/lib/gptlink` if image history matters. The Codex credential store i
 - `502` with rate-limit or allocation text: wait for the subscription allocation to reset.
 - Caddy certificate failure: verify DNS and inbound ports 80/443.
 - Wrong `http://` URLs in output: confirm Caddy is the only proxy and systemd includes `--proxy-headers --forwarded-allow-ips=127.0.0.1`.
+- MCP returns `421`: set `GPTLINK_PUBLIC_BASE_URL` to the exact public HTTPS origin and restart the service.
 - Service cannot write: check ownership of `/var/lib/gptlink` and `/home/gptlink/.codex`.
 
 ## Security checklist

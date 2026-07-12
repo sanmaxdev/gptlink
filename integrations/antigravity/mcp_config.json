@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "gptlink": {
+      "command": "python3",
+      "args": ["-m", "gptlink.mcp_server", "--transport", "stdio"]
+    }
+  }
+}

@@ -15,6 +15,8 @@ class Settings:
     hermes_home: Path
     host: str
     port: int
+    public_base_url: str
+    mcp_allowed_roots: tuple[Path, ...]
 
     @classmethod
     def load(cls) -> "Settings":
@@ -26,6 +28,14 @@ class Settings:
         hermes_home = Path(
             os.environ.get("HERMES_HOME", Path.home() / ".hermes")
         ).resolve()
+        host = os.environ.get("GPTLINK_HOST", "127.0.0.1")
+        port = int(os.environ.get("GPTLINK_PORT", "8787"))
+        configured_roots = os.environ.get("GPTLINK_MCP_ALLOWED_ROOTS", "")
+        allowed_roots = tuple(
+            Path(value).expanduser().resolve()
+            for value in configured_roots.split(os.pathsep)
+            if value.strip()
+        )
         return cls(
             root_dir=root_dir,
             data_dir=data_dir,
@@ -33,8 +43,12 @@ class Settings:
             database_path=data_dir / "gptlink.db",
             codex_home=codex_home,
             hermes_home=hermes_home,
-            host=os.environ.get("GPTLINK_HOST", "127.0.0.1"),
-            port=int(os.environ.get("GPTLINK_PORT", "8787")),
+            host=host,
+            port=port,
+            public_base_url=os.environ.get(
+                "GPTLINK_PUBLIC_BASE_URL", f"http://{host}:{port}"
+            ).rstrip("/"),
+            mcp_allowed_roots=allowed_roots,
         )
 
     def ensure_directories(self) -> None:

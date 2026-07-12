@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "gptlink": {
+      "serverUrl": "https://images.example.com/mcp/",
+      "headers": {"Authorization": "Bearer gptlink_replace_me"}
+    }
+  }
+}

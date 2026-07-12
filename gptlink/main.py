@@ -18,6 +18,7 @@ from gptlink.codex_rpc import CodexAppServer, tolerate_codex_failure
 from gptlink.config import settings
 from gptlink.database import Database
 from gptlink.image_provider import CodexImageProvider, GeneratedImage
+from gptlink.mcp_server import remote_mcp
 from gptlink.schemas import CreateKeyRequest, ImageGenerationRequest, ResponsesImageRequest
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -41,13 +42,14 @@ async def lifespan(_: FastAPI):
         await codex.start()
     except Exception:
         logger.exception("Codex app-server did not start; the dashboard can still load")
-    yield
+    async with remote_mcp.session_manager.run():
+        yield
     await codex.stop()
 
 
 app = FastAPI(
     title="GPTLink",
-    version="0.3.0",
+    version="0.4.0",
     description="Local GPT Image 2 API gateway backed by ChatGPT/Codex auth.",
     lifespan=lifespan,
 )
@@ -536,4 +538,5 @@ async def get_image_file(filename: str) -> FileResponse:
 
 
 static_dir = settings.root_dir / "gptlink" / "static"
+app.mount("/mcp", remote_mcp.streamable_http_app(), name="mcp")
 app.mount("/", StaticFiles(directory=static_dir, html=True), name="dashboard")
