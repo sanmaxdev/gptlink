@@ -2,7 +2,10 @@
 
 from pathlib import Path
 
-from .hermes_plugin import schemas, tools
+try:
+    from .hermes_plugin import schemas, tools
+except ImportError:  # Direct source loading without a package namespace.
+    from hermes_plugin import schemas, tools
 
 
 def register(ctx) -> None:
@@ -24,4 +27,3 @@ def register(ctx) -> None:
     skill = Path(__file__).parent / "skills" / "gptlink-image" / "SKILL.md"
     if skill.exists():
         ctx.register_skill("gptlink-image", skill)
-
