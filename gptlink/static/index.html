@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GPTLink</title>
+    <meta name="description" content="A local GPT Image 2 API powered by your Codex session." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111111'/%3E%3Ccircle cx='11' cy='16' r='4' fill='white'/%3E%3Ccircle cx='21' cy='11' r='3' fill='%2393c5fd'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">
+        <span class="brand-mark"><i></i><i></i></span>
+        <span>GPTLink</span>
+      </a>
+      <div class="header-actions">
+        <span id="accountPill" class="account-pill loading"><i></i><span id="accountLabel">Connecting</span></span>
+        <button id="refreshButton" class="text-button">Refresh</button>
+        <button id="loginButton" class="text-button hidden">Connect</button>
+        <button id="logoutButton" class="text-button hidden">Disconnect</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="intro">
+        <p class="kicker">LOCAL IMAGE API</p>
+        <h1>Create with GPT Image 2.</h1>
+        <p>Use your Codex session for generation, references, edits, masks, and streaming output.</p>
+      </section>
+
+      <section class="workspace">
+        <form id="generateForm" class="composer panel">
+          <div class="mode-tabs" role="tablist" aria-label="Image task">
+            <button class="mode-tab active" type="button" data-mode="create">Create</button>
+            <button class="mode-tab" type="button" data-mode="edit">Edit or reference</button>
+          </div>
+
+          <label class="field prompt-field">
+            <span>Prompt</span>
+            <textarea id="prompt" rows="5" placeholder="Describe the image you want to make…" required></textarea>
+          </label>
+
+          <section id="referenceSection" class="reference-section hidden">
+            <div class="field-label-row">
+              <span>Reference images</span>
+              <small>Up to 16</small>
+            </div>
+            <label id="referenceDropzone" class="dropzone">
+              <input id="referenceInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple />
+              <strong>Add images</strong>
+              <span>Drop files here or browse</span>
+            </label>
+            <div id="referencePreview" class="file-preview"></div>
+            <label class="mask-upload">
+              <span>Optional mask</span>
+              <input id="maskInput" type="file" accept="image/png" />
+              <em id="maskLabel">Choose a PNG mask</em>
+            </label>
+          </section>
+
+          <div class="field">
+            <span>Aspect ratio</span>
+            <div id="ratioOptions" class="choice-row">
+              <button type="button" class="choice active" data-ratio="auto">Auto</button>
+              <button type="button" class="choice" data-ratio="1:1">1:1</button>
+              <button type="button" class="choice" data-ratio="16:9">16:9</button>
+              <button type="button" class="choice" data-ratio="9:16">9:16</button>
+              <button type="button" class="choice" data-ratio="4:3">4:3</button>
+              <button type="button" class="choice" data-ratio="3:2">3:2</button>
+              <button type="button" class="choice" data-ratio="custom">Custom</button>
+            </div>
+            <div id="customSize" class="custom-size hidden">
+              <label><span>Width</span><input id="customWidth" type="number" min="256" max="3840" step="16" value="1024" /></label>
+              <span>×</span>
+              <label><span>Height</span><input id="customHeight" type="number" min="256" max="3840" step="16" value="1024" /></label>
+            </div>
+          </div>
+
+          <div class="option-grid">
+            <label class="field"><span>Quality</span><select id="quality"><option value="auto">Auto</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+            <label class="field"><span>Format</span><select id="outputFormat"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp">WebP</option></select></label>
+            <label class="field"><span>Images</span><select id="imageCount"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label>
+          </div>
+
+          <div id="compressionField" class="field compression hidden">
+            <div class="field-label-row"><span>Compression</span><small id="compressionValue">80%</small></div>
+            <input id="compression" type="range" min="0" max="100" value="80" />
+          </div>
+
+          <details class="advanced">
+            <summary>Advanced settings</summary>
+            <div class="option-grid advanced-grid">
+              <label class="field"><span>Background</span><select id="background"><option value="auto">Auto</option><option value="opaque">Opaque</option></select></label>
+              <label class="field"><span>Moderation</span><select id="moderation"><option value="auto">Auto</option><option value="low">Low</option></select></label>
+              <label class="field"><span>Previews</span><select id="partialImages"><option value="1">1 partial</option><option value="2">2 partials</option><option value="3">3 partials</option><option value="0">None</option></select></label>
+            </div>
+          </details>
+
+          <div id="formMessage" class="form-message hidden"></div>
+          <button id="generateButton" class="primary-button" type="submit"><span>Generate</span><kbd>⌘ ↵</kbd></button>
+        </form>
+
+        <aside class="result panel">
+          <div class="panel-title-row">
+            <div><span class="section-label">OUTPUT</span><h2>Preview</h2></div>
+            <span id="resultMeta" class="result-meta"></span>
+          </div>
+          <div id="resultStage" class="result-stage empty">
+            <div id="emptyResult" class="empty-state"><span>+</span><p>Your result will appear here.</p></div>
+            <div id="loadingResult" class="loading-state hidden"><i></i><strong>Generating</strong><p id="loadingText">Waiting for the first preview…</p></div>
+            <div id="resultGrid" class="result-grid hidden"></div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="api-section">
+        <div class="section-heading"><div><p class="kicker">DEVELOPER ACCESS</p><h2>Connect your applications.</h2></div><button id="createKeyButton" class="secondary-button">Create API key</button></div>
+        <div class="api-grid">
+          <article class="panel key-panel">
+            <div id="newKeyReveal" class="key-reveal hidden"><span>Copy this key now</span><code id="newKeyValue"></code><button id="copyKeyButton" type="button">Copy</button></div>
+            <div id="keyList" class="key-list"></div>
+          </article>
+          <article class="panel code-panel">
+            <div class="code-title"><span>Images API</span><button id="copyCodeButton" type="button">Copy</button></div>
+            <pre><code id="codeExample"></code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="library">
+        <div class="section-heading"><div><p class="kicker">RECENT</p><h2>Image library</h2></div></div>
+        <div id="imageHistory" class="image-history"></div>
+      </section>
+    </main>
+    <div id="toast" class="toast"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>
+

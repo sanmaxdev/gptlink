@@ -1,0 +1,4 @@
+interface:
+  display_name: "GPTLink Images"
+  short_description: "Generate and edit images through GPTLink"
+  default_prompt: "Use $gptlink-image to generate an image and save it locally."

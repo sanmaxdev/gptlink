@@ -1,0 +1,11 @@
+images.example.com {
+	encode zstd gzip
+
+	@allowed path /v1/* /files/* /health
+	handle @allowed {
+		reverse_proxy 127.0.0.1:8787
+	}
+
+	respond "Not found" 404
+}
+

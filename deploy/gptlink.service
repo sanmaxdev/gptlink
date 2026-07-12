@@ -1,0 +1,24 @@
+[Unit]
+Description=GPTLink image API gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gptlink
+Group=gptlink
+WorkingDirectory=/opt/gptlink
+EnvironmentFile=/etc/gptlink.env
+ExecStart=/opt/gptlink/.venv/bin/uvicorn gptlink.main:app --host 127.0.0.1 --port 8787 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/gptlink /home/gptlink/.codex
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
+
