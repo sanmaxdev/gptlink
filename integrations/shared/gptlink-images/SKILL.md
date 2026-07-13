@@ -1,31 +1,47 @@
 ---
 name: gptlink-images
-description: Generate, edit, combine, and create variations of images through the GPTLink MCP tools. Use for text-to-image work, visual assets, UI mockups, reference-image edits, masks, aspect ratios, exact dimensions, multiple outputs, image history, or diagnosing GPTLink readiness.
+description: Generate, edit, combine, and vary images through GPTLink MCP. Use for text-to-image work, visual assets, UI mockups, reference edits, masks, exact dimensions, aspect ratios, multiple outputs, image history, or GPTLink readiness diagnosis.
 ---
 
 # GPTLink Images
 
-Use the GPTLink MCP tools directly. Do not use terminal HTTP commands when the tools are available.
+Use GPTLink MCP tools directly. Do not recreate HTTP calls or request credentials
+when the tools are available.
 
-## Workflow
+## Choose the tool
 
-1. Call `gptlink_status` only when readiness is unknown or a generation call fails.
-2. Call `gptlink_generate` for text-only creation.
-3. Call `gptlink_edit` when one or more reference images must influence the result.
-4. Call `gptlink_variation` when the user wants alternatives that preserve the source identity.
-5. Return the generated file path and show the image when the client supports local-image rendering.
+1. Use `gptlink_generate` for text-only creation.
+2. Use `gptlink_edit` for one to sixteen references or a mask.
+3. Use `gptlink_variation` for alternatives that preserve source identity.
+4. Use `gptlink_models` only when capability discovery matters.
+5. Use `gptlink_status` when readiness is unknown or a call fails.
+6. Use `gptlink_history` to recover recent output paths without regenerating.
 
-## Controls
+## Set controls
 
 - Use either `aspect_ratio` or `size`, never both.
 - Default to `quality: auto` and `output_format: png`.
-- Use `16:9` for banners and landscapes, `9:16` for phone/social verticals, `1:1` for icons and products, and `4:3` for general editorial visuals.
-- Use `output_directory` when the image belongs in the active project. It must be under a path allowed by the GPTLink installation.
-- Use up to 16 reference images. Pass absolute local paths when GPTLink runs on the same machine; use HTTP(S) or data URLs for a remote server.
+- Choose `1:1` for icons/products, `16:9` for banners/landscapes, `9:16`
+  for vertical social assets, and `4:3` for editorial visuals.
+- Use `output_directory` for project-bound assets.
+- Use absolute local references in local mode. Use HTTP(S) or data URLs when
+  the MCP server is remote.
 - Describe what to preserve and what to change in every edit prompt.
+- Never silently omit a requested reference.
 
-## Errors
+## Deliver the result
 
-- If authentication is missing, tell the user to complete the GPTLink/Codex device login; never request or reveal OAuth tokens.
-- If a local path is rejected, use a path under an allowed root or ask the GPTLink operator to add it through `GPTLINK_MCP_ALLOWED_ROOTS`.
-- If a remote agent cannot access a local reference, upload it to an accessible URL or use local stdio mode.
+Return the saved path and render the image when the client supports it. Prefer
+paths/URLs over base64. If the user asks for several distinct assets, make a
+separate call per distinct prompt; use `n` only for variants of one prompt.
+
+## Recover safely
+
+- If authentication is missing, direct the user to complete GPTLink/Codex device
+  login. Never request or reveal OAuth tokens, cookies, or credential files.
+- If a path is rejected, use an allowed root or ask the operator to add a narrow
+  root through `GPTLINK_MCP_ALLOWED_ROOTS`.
+- If a remote server cannot access a client-local reference, use an accessible
+  URL or local stdio mode.
+- If an allocation limit is returned, report it and wait for reset rather than
+  retrying repeatedly.

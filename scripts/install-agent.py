@@ -203,7 +203,10 @@ def main() -> None:
         "mode": args.mode,
         "installed": installed,
         "failed": failures,
-        "next_step": "Restart the agent, then ask it to check GPTLink status and generate an image.",
+        "next_step": (
+            "Restart or reload the agent, call gptlink_status, and complete Codex "
+            "device login only if authentication is missing."
+        ),
     }, indent=2))
     if not installed:
         raise SystemExit(1)
