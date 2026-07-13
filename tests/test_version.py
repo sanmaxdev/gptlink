@@ -9,6 +9,6 @@ def test_public_versions_stay_in_sync() -> None:
         encoding="utf-8"
     )
 
-    assert __version__ == "0.5.0"
+    assert __version__ == "0.6.0"
     assert app.version == __version__
     assert f"version: {__version__}" in plugin_manifest

@@ -6,6 +6,7 @@ const ui = {
   login: $('#loginButton'), logout: $('#logoutButton'), form: $('#generateForm'), prompt: $('#prompt'),
   quality: $('#quality'), outputFormat: $('#outputFormat'), imageCount: $('#imageCount'),
   background: $('#background'), moderation: $('#moderation'), partialImages: $('#partialImages'),
+  runAsync: $('#runAsync'), webhookUrl: $('#webhookUrl'),
   compressionField: $('#compressionField'), compression: $('#compression'), compressionValue: $('#compressionValue'),
   referenceSection: $('#referenceSection'), referenceInput: $('#referenceInput'), referenceDropzone: $('#referenceDropzone'),
   referencePreview: $('#referencePreview'), maskInput: $('#maskInput'), maskLabel: $('#maskLabel'),
@@ -14,14 +15,15 @@ const ui = {
   loadingResult: $('#loadingResult'), loadingText: $('#loadingText'), resultGrid: $('#resultGrid'),
   resultMeta: $('#resultMeta'), createKey: $('#createKeyButton'), keyList: $('#keyList'),
   newKeyReveal: $('#newKeyReveal'), newKeyValue: $('#newKeyValue'), copyKey: $('#copyKeyButton'),
-  copyCode: $('#copyCodeButton'), codeExample: $('#codeExample'), history: $('#imageHistory'), toast: $('#toast')
+  copyCode: $('#copyCodeButton'), codeExample: $('#codeExample'), history: $('#imageHistory'),
+  refreshJobs: $('#refreshJobsButton'), jobList: $('#jobList'), toast: $('#toast')
 }
 
 let mode = 'create'
 let selectedRatio = 'auto'
 let referenceFiles = []
 let maskFile = null
-let currentApiKey = localStorage.getItem('gptlinkApiKey') || ''
+let currentApiKey = ''
 let toastTimer
 
 function toast(message) {
@@ -132,8 +134,43 @@ function generationOptions() {
   }
 }
 
-function buildRequest() {
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.addEventListener('load', () => resolve(String(reader.result)))
+    reader.addEventListener('error', () => reject(new Error(`Could not read ${file.name}`)))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function buildRequest() {
   const options = generationOptions()
+  const background = ui.runAsync.checked || Boolean(ui.webhookUrl.value.trim())
+  if (background) {
+    const references = await Promise.all(referenceFiles.map(fileToDataUrl))
+    const mask = maskFile ? await fileToDataUrl(maskFile) : null
+    return {
+      background: true,
+      url: '/v1/jobs',
+      options: {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${currentApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operation: mode === 'edit' ? 'edit' : 'generate',
+          prompt: ui.prompt.value.trim(),
+          reference_images: references,
+          mask_image: mask,
+          size: options.size,
+          quality: options.quality,
+          output_format: options.output_format,
+          ...(options.output_compression === undefined ? {} : { output_compression: options.output_compression }),
+          moderation: options.moderation,
+          n: options.n,
+          webhook_url: ui.webhookUrl.value.trim() || null
+        })
+      }
+    }
+  }
   if (mode === 'create') {
     return {
       url: '/v1/images/generations',
@@ -184,6 +221,40 @@ function showResultImage(index, source, label) {
   ui.loadingResult.classList.add('hidden')
 }
 
+function safeImageSource(value) {
+  if (String(value).startsWith('data:image/')) return String(value)
+  try {
+    const url = new URL(String(value), window.location.origin)
+    if (!url.pathname.startsWith('/files/')) return null
+    return `${url.pathname}${url.search}`
+  } catch (_) {
+    return null
+  }
+}
+
+async function waitForJob(jobId) {
+  while (true) {
+    const job = await requestJson(`/v1/jobs/${encodeURIComponent(jobId)}`, {
+      headers: { Authorization: `Bearer ${currentApiKey}` }
+    })
+    ui.loadingText.textContent = job.status === 'queued' ? 'Queued for a worker…' : 'Generating in the background…'
+    await loadJobs()
+    if (job.status === 'completed') return job
+    if (job.status === 'failed') throw new Error(job.error || 'Background generation failed')
+    if (job.status === 'cancelled') throw new Error('Background generation was cancelled')
+    await new Promise(resolve => setTimeout(resolve, 1200))
+  }
+}
+
+function showJobResults(job) {
+  const images = job.result?.images || []
+  images.forEach((image, index) => {
+    const source = safeImageSource(image.url)
+    if (source) showResultImage(index, source, 'Final')
+  })
+  ui.resultMeta.textContent = `${images.length} complete`
+}
+
 async function consumeImageStream(response) {
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
@@ -229,10 +300,18 @@ async function generate(event) {
     return
   }
   try {
-    const request = buildRequest()
+    const request = await buildRequest()
     setGenerating(true)
     const response = await fetch(request.url, request.options)
-    await consumeImageStream(response)
+    if (request.background) {
+      const queued = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(queued.error?.message || `Could not queue job (${response.status})`)
+      ui.loadingText.textContent = `Queued as ${queued.id}`
+      await loadJobs()
+      showJobResults(await waitForJob(queued.id))
+    } else {
+      await consumeImageStream(response)
+    }
     toast('Generation complete.')
     await loadHistory()
   } catch (error) {
@@ -255,7 +334,13 @@ async function loadKeys() {
   data.forEach(key => {
     const row = document.createElement('div')
     row.className = `key-row${key.revoked_at ? ' revoked' : ''}`
-    row.innerHTML = `<div><strong>${escapeHtml(key.name)}</strong><code>${escapeHtml(key.prefix)}••••••••</code></div>`
+    const details = document.createElement('div')
+    const name = document.createElement('strong')
+    const prefix = document.createElement('code')
+    name.textContent = key.name
+    prefix.textContent = `${key.prefix}••••••••`
+    details.append(name, prefix)
+    row.append(details)
     if (!key.revoked_at) {
       const button = document.createElement('button')
       button.className = 'revoke-button'
@@ -270,7 +355,6 @@ async function loadKeys() {
 async function createKey() {
   const payload = await requestJson('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Local app' }) })
   currentApiKey = payload.data.secret
-  localStorage.setItem('gptlinkApiKey', currentApiKey)
   ui.newKeyValue.textContent = currentApiKey
   ui.newKeyReveal.classList.remove('hidden')
   updateCode()
@@ -292,21 +376,78 @@ async function loadHistory() {
   data.forEach(image => {
     const link = document.createElement('a')
     link.className = 'history-item'
-    link.href = image.url
+    const source = safeImageSource(image.url)
+    if (!source) return
+    link.href = source
     link.target = '_blank'
     link.rel = 'noopener'
-    link.innerHTML = `<img src="${image.url}" alt="${escapeHtml(image.prompt)}" loading="lazy"><span class="history-meta">${escapeHtml(image.prompt)}</span>`
+    const preview = document.createElement('img')
+    const meta = document.createElement('span')
+    preview.src = source
+    preview.alt = image.prompt
+    preview.loading = 'lazy'
+    meta.className = 'history-meta'
+    meta.textContent = image.prompt
+    link.append(preview, meta)
     ui.history.append(link)
   })
 }
 
-function escapeHtml(value) {
-  return String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character])
+function formatJobTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString()
+}
+
+async function loadJobs() {
+  const { data } = await requestJson('/api/jobs?limit=20')
+  ui.jobList.innerHTML = ''
+  if (!data.length) {
+    const empty = document.createElement('p')
+    empty.className = 'empty-history'
+    empty.textContent = 'No background jobs yet.'
+    ui.jobList.append(empty)
+    return
+  }
+  data.forEach(job => {
+    const row = document.createElement('article')
+    row.className = 'job-row'
+    const body = document.createElement('div')
+    const heading = document.createElement('div')
+    const prompt = document.createElement('strong')
+    const id = document.createElement('code')
+    const meta = document.createElement('small')
+    const status = document.createElement('span')
+    heading.className = 'job-heading'
+    prompt.textContent = job.request?.prompt || job.operation
+    id.textContent = job.id
+    meta.textContent = [job.operation, formatJobTime(job.created_at), job.webhook_delivery ? `webhook ${job.webhook_delivery.status}` : ''].filter(Boolean).join(' · ')
+    status.className = `job-status ${job.status}`
+    status.textContent = job.status
+    heading.append(prompt, id)
+    body.append(heading, meta)
+    row.append(body, status)
+    if (job.status === 'queued' && currentApiKey) {
+      const cancel = document.createElement('button')
+      cancel.className = 'revoke-button'
+      cancel.textContent = 'Cancel'
+      cancel.addEventListener('click', async () => {
+        await requestJson(`/v1/jobs/${encodeURIComponent(job.id)}/cancel`, {
+          method: 'POST', headers: { Authorization: `Bearer ${currentApiKey}` }
+        })
+        await loadJobs()
+        toast('Job cancelled.')
+      })
+      row.append(cancel)
+    }
+    ui.jobList.append(row)
+  })
 }
 
 $$('.mode-tab').forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode)))
 $$('.choice').forEach(button => button.addEventListener('click', () => setRatio(button.dataset.ratio)))
 ui.outputFormat.addEventListener('change', () => ui.compressionField.classList.toggle('hidden', ui.outputFormat.value === 'png'))
+ui.webhookUrl.addEventListener('input', () => { if (ui.webhookUrl.value.trim()) ui.runAsync.checked = true })
 ui.compression.addEventListener('input', () => { ui.compressionValue.textContent = `${ui.compression.value}%` })
 ui.referenceInput.addEventListener('change', () => addReferences(ui.referenceInput.files))
 ui.referenceDropzone.addEventListener('dragover', event => { event.preventDefault(); ui.referenceDropzone.classList.add('dragging') })
@@ -321,7 +462,7 @@ ui.logout.addEventListener('click', async () => { await requestJson('/api/auth/l
 ui.createKey.addEventListener('click', () => createKey().catch(error => toast(error.message)))
 ui.copyKey.addEventListener('click', async () => { await navigator.clipboard.writeText(ui.newKeyValue.textContent); toast('API key copied.') })
 ui.copyCode.addEventListener('click', async () => { await navigator.clipboard.writeText(ui.codeExample.textContent); toast('Example copied.') })
+ui.refreshJobs.addEventListener('click', () => loadJobs().catch(error => toast(error.message)))
 
 updateCode()
-Promise.all([loadStatus(), loadKeys(), loadHistory()]).catch(error => toast(error.message))
-
+Promise.all([loadStatus(), loadKeys(), loadHistory(), loadJobs()]).catch(error => toast(error.message))

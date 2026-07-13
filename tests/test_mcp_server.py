@@ -12,6 +12,10 @@ def test_mcp_exposes_complete_image_toolset() -> None:
         "gptlink_edit",
         "gptlink_variation",
         "gptlink_history",
+        "gptlink_job_create",
+        "gptlink_job_status",
+        "gptlink_jobs",
+        "gptlink_job_cancel",
     }
 
 

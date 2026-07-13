@@ -17,6 +17,11 @@ class Settings:
     port: int
     public_base_url: str
     mcp_allowed_roots: tuple[Path, ...]
+    webhook_secret: str | None = None
+    webhook_allowed_hosts: tuple[str, ...] = ()
+    webhook_allow_private: bool = False
+    webhook_max_attempts: int = 6
+    job_workers: int = 1
 
     @classmethod
     def load(cls) -> "Settings":
@@ -36,6 +41,14 @@ class Settings:
             for value in configured_roots.split(os.pathsep)
             if value.strip()
         )
+        webhook_hosts = tuple(
+            value.strip().lower()
+            for value in os.environ.get("GPTLINK_WEBHOOK_ALLOWED_HOSTS", "").split(",")
+            if value.strip()
+        )
+        webhook_allow_private = os.environ.get(
+            "GPTLINK_WEBHOOK_ALLOW_PRIVATE", "false"
+        ).lower() in {"1", "true", "yes"}
         return cls(
             root_dir=root_dir,
             data_dir=data_dir,
@@ -49,6 +62,13 @@ class Settings:
                 "GPTLINK_PUBLIC_BASE_URL", f"http://{host}:{port}"
             ).rstrip("/"),
             mcp_allowed_roots=allowed_roots,
+            webhook_secret=os.environ.get("GPTLINK_WEBHOOK_SECRET") or None,
+            webhook_allowed_hosts=webhook_hosts,
+            webhook_allow_private=webhook_allow_private,
+            webhook_max_attempts=max(
+                1, min(int(os.environ.get("GPTLINK_WEBHOOK_MAX_ATTEMPTS", "6")), 12)
+            ),
+            job_workers=max(1, min(int(os.environ.get("GPTLINK_JOB_WORKERS", "1")), 4)),
         )
 
     def ensure_directories(self) -> None:

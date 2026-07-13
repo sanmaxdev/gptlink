@@ -100,3 +100,54 @@ def test_multipart_edit_contract(monkeypatch, tmp_path: Path) -> None:
     assert response.json()["data"][0]["b64_json"] == "aGVsbG8="
     assert calls[0]["input_images"][0].startswith("data:image/png;base64,")
     assert calls[0]["input_image_mask"].startswith("data:image/png;base64,")
+
+
+def test_create_and_read_async_job_contract(monkeypatch) -> None:
+    monkeypatch.setattr(main.database, "validate_api_key", lambda _: True)
+    queued = {
+        "id": "job_test",
+        "object": "image_job",
+        "operation": "generate",
+        "status": "queued",
+    }
+    monkeypatch.setattr(main.job_manager, "create_job", lambda _: queued)
+    monkeypatch.setattr(main.job_manager, "get_job", lambda _: queued)
+
+    created = request(
+        "POST",
+        "/v1/jobs",
+        headers={"Authorization": "Bearer gptlink_test_secret"},
+        json={"prompt": "A durable image job", "aspect_ratio": "16:9"},
+    )
+    fetched = request(
+        "GET",
+        "/v1/jobs/job_test",
+        headers={"Authorization": "Bearer gptlink_test_secret"},
+    )
+
+    assert created.status_code == 202
+    assert created.json()["status"] == "queued"
+    assert fetched.status_code == 200
+    assert fetched.json()["id"] == "job_test"
+
+
+def test_prefer_respond_async_queues_openai_generation(monkeypatch) -> None:
+    monkeypatch.setattr(main.database, "validate_api_key", lambda _: True)
+    monkeypatch.setattr(
+        main.job_manager,
+        "create_job",
+        lambda payload: {"id": "job_prefer", "status": "queued", "request": payload},
+    )
+
+    response = request(
+        "POST",
+        "/v1/images/generations",
+        headers={
+            "Authorization": "Bearer gptlink_test_secret",
+            "Prefer": "respond-async",
+        },
+        json={"prompt": "Queue me"},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["id"] == "job_prefer"

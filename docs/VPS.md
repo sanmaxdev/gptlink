@@ -145,6 +145,22 @@ client key.
 
 ## Operations
 
+### Enable signed webhooks
+
+Jobs are enabled automatically. Webhook callbacks require a server-side HMAC
+secret. Add one without printing it into shell history:
+
+```bash
+secret="$(openssl rand -hex 32)"
+sudo sh -c 'umask 077; printf "\nGPTLINK_WEBHOOK_SECRET=%s\nGPTLINK_WEBHOOK_ALLOWED_HOSTS=hooks.example.com\n" "$1" >> /etc/gptlink.env' sh "$secret"
+unset secret
+sudo systemctl restart gptlink
+```
+
+Replace `hooks.example.com` with the exact callback host. GPTLink permits only
+public HTTPS destinations by default. Follow [JOBS.md](JOBS.md) for API and MCP
+examples, HMAC verification, retries, and private-network policy.
+
 Logs:
 
 ```bash

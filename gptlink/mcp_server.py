@@ -14,6 +14,8 @@ from urllib.parse import urlparse
 from gptlink.agent_service import AgentImageService, IMAGE_MODELS
 from gptlink.config import settings
 from gptlink.database import Database
+from gptlink.jobs import get_job_manager
+from gptlink.schemas import ImageJobRequest
 
 
 class GPTLinkTokenVerifier(TokenVerifier):
@@ -34,6 +36,7 @@ class GPTLinkTokenVerifier(TokenVerifier):
 
 def create_mcp_server(*, require_auth: bool) -> FastMCP:
     service = AgentImageService()
+    jobs = get_job_manager()
     public_url = urlparse(settings.public_base_url)
     public_host = public_url.netloc
     allowed_hosts = ["localhost:*", "127.0.0.1:*", "[::1]:*"]
@@ -164,6 +167,65 @@ def create_mcp_server(*, require_auth: bool) -> FastMCP:
     def gptlink_history(limit: int = 20) -> dict[str, Any]:
         """Return recent generated image metadata, file paths, and URLs without image base64 data."""
         return {"images": service.history(limit)}
+
+    @server.tool()
+    def gptlink_job_create(
+        prompt: str,
+        operation: str = "generate",
+        model: str = "gpt-image-2",
+        reference_images: list[str] | None = None,
+        mask_image: str | None = None,
+        aspect_ratio: str | None = None,
+        size: str = "auto",
+        quality: str = "auto",
+        output_format: str = "png",
+        output_compression: int | None = None,
+        n: int = 1,
+        webhook_url: str | None = None,
+        metadata: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Queue durable image work and return immediately; use gptlink_job_status to poll it."""
+        payload = ImageJobRequest(
+            operation=operation,
+            prompt=prompt,
+            model=model,
+            reference_images=reference_images or [],
+            mask_image=mask_image,
+            aspect_ratio=aspect_ratio,
+            size=size,
+            quality=quality,
+            output_format=output_format,
+            output_compression=output_compression,
+            n=n,
+            webhook_url=webhook_url,
+            metadata=metadata or {},
+        )
+        return jobs.create_job(payload.model_dump())
+
+    @server.tool()
+    def gptlink_job_status(job_id: str) -> dict[str, Any]:
+        """Return current state, output URLs, error, and webhook delivery state for a job."""
+        job = jobs.get_job(job_id)
+        if not job:
+            raise ValueError("Image job not found")
+        return job
+
+    @server.tool()
+    def gptlink_jobs(limit: int = 20, status: str | None = None) -> dict[str, Any]:
+        """List recent durable image jobs, optionally filtered by status."""
+        return {"jobs": jobs.list_jobs(limit=limit, status=status)}
+
+    @server.tool()
+    def gptlink_job_cancel(job_id: str) -> dict[str, Any]:
+        """Cancel a queued job before a worker starts it."""
+        existing = jobs.get_job(job_id)
+        if not existing:
+            raise ValueError("Image job not found")
+        if existing["status"] != "queued":
+            raise ValueError("Only queued jobs can be cancelled")
+        cancelled = jobs.cancel_job(job_id)
+        assert cancelled is not None
+        return cancelled
 
     @server.resource("gptlink://capabilities")
     def capabilities_resource() -> str:

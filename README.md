@@ -168,6 +168,8 @@ images into the agent's context.
 - Partial previews and Server-Sent Events
 - Local file paths, HTTP(S) references, and data URLs through MCP
 - Image history with saved paths and URLs
+- Durable background jobs that survive service restarts
+- Signed webhook completion/failure events with automatic retries
 
 ### MCP tools
 
@@ -179,6 +181,10 @@ images into the agent's context.
 | `gptlink_edit` | Edit or combine up to 16 references, optionally with a mask |
 | `gptlink_variation` | Produce alternatives that preserve source identity |
 | `gptlink_history` | Retrieve recent outputs without base64 context bloat |
+| `gptlink_job_create` | Queue durable generation, edit, or variation work |
+| `gptlink_job_status` | Poll state, outputs, errors, and webhook delivery |
+| `gptlink_jobs` | List and filter recent jobs |
+| `gptlink_job_cancel` | Cancel work that is still queued |
 
 ## Docker quick start
 
@@ -263,6 +269,9 @@ Responses image-generation bridge.
 | `POST /v1/images/edits` | References and masks |
 | `POST /v1/images/variations` | Reference-based variation emulation |
 | `POST /v1/responses` | Image-generation tool requests |
+| `POST /v1/jobs` | Durable asynchronous generation, edit, or variation |
+| `GET /v1/jobs/{id}` | Job status and result URLs |
+| `POST /v1/jobs/{id}/cancel` | Cancel queued work |
 | `GET /v1/models` | Supported aliases |
 | `/mcp/` | Authenticated MCP Streamable HTTP |
 | `GET /health` | Health check |
@@ -284,6 +293,20 @@ curl http://127.0.0.1:8787/v1/images/generations \
 
 </details>
 
+Queue any normal generation endpoint with `Prefer: respond-async`, or use the
+job API directly:
+
+```bash
+curl http://127.0.0.1:8787/v1/jobs \
+  -H "Authorization: Bearer $GPTLINK_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"A luminous bridge above Colombo","aspect_ratio":"16:9","quality":"high"}'
+```
+
+Poll the returned `job_...` ID at `GET /v1/jobs/{id}`. See the complete
+[background jobs and webhooks guide](docs/JOBS.md) for edits, cancellation,
+callback signatures, retries, and private-network controls.
+
 Supported aliases: `gpt-image-2-low`, `gpt-image-2-medium`,
 `gpt-image-2-high`, and `gpt-image-2-auto`.
 
@@ -295,6 +318,9 @@ Supported aliases: `gpt-image-2-low`, `gpt-image-2-medium`,
 - Gateway secrets are stored only as SHA-256 hashes.
 - Remote MCP uses the same revocable per-agent Bearer keys as `/v1`.
 - Local MCP file access is constrained to configured allowed roots.
+- Webhooks require a 32+ character environment secret and exact operator host allowlist, block local/private
+  network targets by default, do not follow redirects, and carry HMAC-SHA256 signatures.
+- The dashboard keeps newly created gateway keys in memory only, not browser storage.
 - The supplied Caddy policy excludes the dashboard and `/api/*` management routes.
 - Hermes executable logic is isolated in an explicitly enabled plugin; its
   bundled community skill remains scanner-safe and non-executable.
@@ -311,6 +337,7 @@ GPTLink agent key.
 | [Docker deployment](docs/DOCKER.md) | Persistent container installation and safe updates |
 | [Ubuntu VPS](docs/VPS.md) | systemd, Caddy, DNS, HTTPS, firewall, updates, backups |
 | [Compatibility matrix](docs/COMPATIBILITY.md) | Auditable client, endpoint, and feature support |
+| [Jobs and webhooks](docs/JOBS.md) | Durable queues, polling, signed delivery, retries, and verification |
 | [OpenCode local template](integrations/opencode/local.json) | Manual local OpenCode MCP configuration |
 | [OpenCode remote template](integrations/opencode/remote.json) | Manual hosted OpenCode MCP configuration |
 | [Generic stdio template](integrations/generic/stdio.json) | Local MCP clients |

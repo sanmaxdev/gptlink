@@ -89,6 +89,23 @@ The hardened route policy in `deploy/Caddyfile` can be used with the host's
 Caddy installation. See [VPS.md](VPS.md) for DNS, firewall, TLS, and SSH tunnel
 instructions.
 
+## Background jobs and webhooks
+
+Jobs work without additional configuration and are persisted in the
+`gptlink-data` volume. To enable callback delivery, generate a signing secret
+and start Compose with it:
+
+```bash
+export GPTLINK_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+export GPTLINK_WEBHOOK_ALLOWED_HOSTS=hooks.example.com
+docker compose up -d
+```
+
+Keep that secret out of Compose files and version control. Every callback host
+must be present in the operator-controlled allowlist and use public HTTPS by
+default. See [JOBS.md](JOBS.md) for signature verification, retry
+behavior, and the explicit private-network opt-in.
+
 ## Mount additional reference files
 
 Container MCP access is limited to `/data/images` by default. Add a narrow

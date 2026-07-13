@@ -147,6 +147,7 @@ class AgentImageService:
         self,
         *,
         prompt: str,
+        model: str = "gpt-image-2",
         reference_images: list[str] | None = None,
         mask_image: str | None = None,
         aspect_ratio: str | None = None,
@@ -183,7 +184,7 @@ class AgentImageService:
                 return await asyncio.to_thread(
                     self.provider.generate,
                     prompt=prompt,
-                    model="gpt-image-2",
+                    model=model,
                     size=resolved_size,
                     quality=quality,
                     output_format=output_format,

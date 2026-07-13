@@ -16,6 +16,8 @@ One installation exposes:
 - A concise image workflow skill for the target agent.
 
 MCP results contain saved paths and URLs instead of large base64 payloads.
+Long-running work can be queued with `gptlink_job_create`; poll it with
+`gptlink_job_status`, or provide an operator-configured HTTPS webhook.
 
 ## Autonomous installation procedure
 
@@ -356,6 +358,21 @@ Use `integrations/generic/stdio.json` or `integrations/generic/remote.json` as
 portable configuration templates.
 
 ## Image tool workflow
+
+For interactive work, call `gptlink_generate`, `gptlink_edit`, or
+`gptlink_variation` and wait for the result. For automation, parallel work, or
+tasks that must survive an agent restart:
+
+1. Call `gptlink_job_create` with `operation` set to `generate`, `edit`, or
+   `variation`.
+2. Save the returned `job_...` ID in the task state.
+3. Poll `gptlink_job_status` until `completed`, `failed`, or `cancelled`.
+4. Use returned `result.images[].path` for local MCP or `.url` for remote MCP.
+5. Use `gptlink_job_cancel` only while status is `queued`.
+
+Do not invent callback URLs or signing secrets. If the user explicitly asks
+for webhook delivery, follow [JOBS.md](JOBS.md) and let the server operator
+configure `GPTLINK_WEBHOOK_SECRET` and any callback host allowlist.
 
 Use `gptlink_generate` for text-only requests, `gptlink_edit` for references or
 masks, and `gptlink_variation` for source-preserving alternatives.

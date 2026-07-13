@@ -8,19 +8,27 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from gptlink import __version__
 from gptlink.codex_rpc import CodexAppServer, tolerate_codex_failure
 from gptlink.config import settings
 from gptlink.database import Database
 from gptlink.image_provider import CodexImageProvider, GeneratedImage
+from gptlink.jobs import get_job_manager
 from gptlink.mcp_server import remote_mcp
-from gptlink.schemas import CreateKeyRequest, ImageGenerationRequest, ResponsesImageRequest
+from gptlink.schemas import (
+    CreateKeyRequest,
+    ImageGenerationRequest,
+    ImageJobRequest,
+    ResponsesImageRequest,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -33,6 +41,7 @@ image_provider = CodexImageProvider(
     image_dir=settings.image_dir,
 )
 generation_lock = asyncio.Semaphore(2)
+job_manager = get_job_manager()
 
 
 @asynccontextmanager
@@ -43,9 +52,13 @@ async def lifespan(_: FastAPI):
         await codex.start()
     except Exception:
         logger.exception("Codex app-server did not start; the dashboard can still load")
-    async with remote_mcp.session_manager.run():
-        yield
-    await codex.stop()
+    job_manager.start()
+    try:
+        async with remote_mcp.session_manager.run():
+            yield
+    finally:
+        job_manager.stop()
+        await codex.stop()
 
 
 app = FastAPI(
@@ -54,6 +67,30 @@ app = FastAPI(
     description="Local GPT Image 2 API gateway backed by ChatGPT/Codex auth.",
     lifespan=lifespan,
 )
+public_host = urlparse(settings.public_base_url).hostname
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=list(
+        dict.fromkeys(
+            ["localhost", "127.0.0.1", "[::1]", "testserver", public_host or settings.host]
+        )
+    ),
+)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self'; style-src 'self'; "
+        "img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; "
+        "base-uri 'self'; form-action 'self'"
+    )
+    return response
 
 
 def openai_error(message: str, *, error_type: str, code: str | None = None) -> dict[str, Any]:
@@ -306,6 +343,11 @@ async def list_images() -> dict[str, Any]:
     }
 
 
+@app.get("/api/jobs")
+async def dashboard_jobs(limit: int = 30, status: str | None = None) -> dict[str, Any]:
+    return {"data": job_manager.list_jobs(limit=limit, status=status)}
+
+
 @app.get("/v1/models", dependencies=[Depends(require_api_key)])
 async def list_models() -> dict[str, Any]:
     models = ("gpt-image-2", "gpt-image-2-low", "gpt-image-2-medium", "gpt-image-2-high", "gpt-image-2-auto")
@@ -313,10 +355,31 @@ async def list_models() -> dict[str, Any]:
 
 
 @app.post("/v1/images/generations", dependencies=[Depends(require_api_key)])
-async def generate_image(payload: ImageGenerationRequest, request: Request):
+async def generate_image(
+    payload: ImageGenerationRequest,
+    prefer: Annotated[str | None, Header()] = None,
+):
+    if payload.webhook_url or (prefer and "respond-async" in prefer.lower()):
+        if payload.stream:
+            raise HTTPException(status_code=400, detail="Streaming cannot be queued as a job")
+        job_payload = {
+            "operation": "generate",
+            "prompt": payload.prompt,
+            "model": payload.model,
+            "aspect_ratio": payload.aspect_ratio,
+            "size": payload.size,
+            "quality": payload.quality,
+            "output_format": payload.output_format,
+            "output_compression": payload.output_compression,
+            "moderation": payload.moderation,
+            "n": payload.n,
+            "webhook_url": payload.webhook_url,
+            "metadata": payload.metadata,
+        }
+        return JSONResponse(job_manager.create_job(job_payload), status_code=202)
     await refresh_codex_auth()
     resolved_size = resolve_size(payload.size, payload.aspect_ratio)
-    base_url = str(request.base_url).rstrip("/")
+    base_url = settings.public_base_url
     kwargs = {
         "prompt": payload.prompt,
         "model": payload.model,
@@ -354,7 +417,6 @@ async def generate_image(payload: ImageGenerationRequest, request: Request):
 
 @app.post("/v1/images/edits", dependencies=[Depends(require_api_key)])
 async def edit_image(
-    request: Request,
     image: Annotated[list[UploadFile], File()],
     prompt: Annotated[str, Form(min_length=1, max_length=32_000)],
     mask: Annotated[UploadFile | None, File()] = None,
@@ -370,14 +432,36 @@ async def edit_image(
     moderation: Annotated[str, Form()] = "auto",
     partial_images: Annotated[int, Form(ge=0, le=3)] = 0,
     stream: Annotated[bool, Form()] = False,
+    webhook_url: Annotated[str | None, Form(max_length=2048)] = None,
+    prefer: Annotated[str | None, Header()] = None,
 ):
     if len(image) > 16:
         raise HTTPException(status_code=400, detail="At most 16 input images are supported")
     input_images = [await upload_to_data_url(upload) for upload in image]
     input_mask = await upload_to_data_url(mask) if mask else None
+    if webhook_url or (prefer and "respond-async" in prefer.lower()):
+        if stream:
+            raise HTTPException(status_code=400, detail="Streaming cannot be queued as a job")
+        job_payload = ImageJobRequest(
+            operation="edit",
+            prompt=prompt,
+            reference_images=input_images,
+            mask_image=input_mask,
+            aspect_ratio=aspect_ratio,
+            size=size,
+            quality=quality,
+            output_format=output_format,
+            output_compression=output_compression,
+            moderation=moderation,
+            n=n,
+            webhook_url=webhook_url,
+        )
+        return JSONResponse(
+            job_manager.create_job(job_payload.model_dump()), status_code=202
+        )
     await refresh_codex_auth()
     resolved_size = resolve_size(size, aspect_ratio)
-    base_url = str(request.base_url).rstrip("/")
+    base_url = settings.public_base_url
     kwargs = {
         "prompt": prompt.strip(), "model": model, "size": resolved_size, "quality": quality,
         "output_format": output_format, "background": background,
@@ -406,16 +490,29 @@ async def edit_image(
 
 @app.post("/v1/images/variations", dependencies=[Depends(require_api_key)])
 async def create_variation(
-    request: Request,
     image: Annotated[UploadFile, File()],
     n: Annotated[int, Form(ge=1, le=10)] = 1,
     size: Annotated[str, Form()] = "auto",
     response_format: Annotated[str, Form()] = "b64_json",
+    webhook_url: Annotated[str | None, Form(max_length=2048)] = None,
+    prefer: Annotated[str | None, Header()] = None,
 ):
     reference = await upload_to_data_url(image)
+    prompt = "Create a distinct high-quality variation of this reference image while preserving its subject and visual identity."
+    if webhook_url or (prefer and "respond-async" in prefer.lower()):
+        job_payload = ImageJobRequest(
+            operation="variation",
+            prompt=prompt,
+            reference_images=[reference],
+            size=size,
+            n=n,
+            webhook_url=webhook_url,
+        )
+        return JSONResponse(
+            job_manager.create_job(job_payload.model_dump()), status_code=202
+        )
     await refresh_codex_auth()
     resolved_size = image_provider.validate_size(size)
-    prompt = "Create a distinct high-quality variation of this reference image while preserving its subject and visual identity."
     images = await generate_many(
         count=n, prompt=prompt, model="gpt-image-2", size=resolved_size, quality="auto",
         output_format="png", background="auto", output_compression=None,
@@ -423,12 +520,44 @@ async def create_variation(
     )
     for generated in images:
         record_generated_image(generated, prompt)
-    base_url = str(request.base_url).rstrip("/")
+    base_url = settings.public_base_url
     return {
         "created": int(time.time()),
         "data": [image_response_item(item, response_format, base_url) for item in images],
         "gptlink_emulated": True,
     }
+
+
+@app.post("/v1/jobs", dependencies=[Depends(require_api_key)], status_code=202)
+async def create_job(payload: ImageJobRequest) -> dict[str, Any]:
+    return job_manager.create_job(payload.model_dump())
+
+
+@app.get("/v1/jobs", dependencies=[Depends(require_api_key)])
+async def list_jobs(limit: int = 30, status: str | None = None) -> dict[str, Any]:
+    if status and status not in {"queued", "running", "completed", "failed", "cancelled"}:
+        raise HTTPException(status_code=400, detail="Invalid job status")
+    return {"object": "list", "data": job_manager.list_jobs(limit=limit, status=status)}
+
+
+@app.get("/v1/jobs/{job_id}", dependencies=[Depends(require_api_key)])
+async def get_job(job_id: str) -> dict[str, Any]:
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Image job not found")
+    return job
+
+
+@app.post("/v1/jobs/{job_id}/cancel", dependencies=[Depends(require_api_key)])
+async def cancel_job(job_id: str) -> dict[str, Any]:
+    existing = job_manager.get_job(job_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Image job not found")
+    if existing["status"] != "queued":
+        raise HTTPException(status_code=409, detail="Only queued jobs can be cancelled")
+    cancelled = job_manager.cancel_job(job_id)
+    assert cancelled is not None
+    return cancelled
 
 
 def parse_responses_input(value: str | list[dict[str, Any]]) -> tuple[str, list[str]]:

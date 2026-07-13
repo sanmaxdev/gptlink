@@ -48,6 +48,7 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.035em; font-weight: 620; }
 .field-label-row { display: flex; align-items: center; justify-content: space-between; }
 .field-label-row small { color: var(--faint); font-size: 11px; }
 textarea, select, input[type="number"] { width: 100%; color: var(--ink); background: white; border: 1px solid var(--line-dark); border-radius: 10px; outline: none; }
+input[type="url"] { width: 100%; height: 40px; padding: 0 11px; color: var(--ink); background: white; border: 1px solid var(--line-dark); border-radius: 10px; outline: none; }
 textarea { padding: 14px; resize: vertical; min-height: 125px; line-height: 1.55; }
 select, input[type="number"] { height: 40px; padding: 0 11px; }
 textarea:focus, select:focus, input:focus { border-color: #9eb9f5; box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -66,6 +67,14 @@ textarea:focus, select:focus, input:focus { border-color: #9eb9f5; box-shadow: 0
 .advanced summary::after { content: "+"; float: right; color: var(--faint); }
 .advanced[open] summary::after { content: "−"; }
 .advanced-grid { margin-top: 17px; }
+.background-options { margin-top: 2px; padding: 15px; border-radius: 10px; background: #fafaf8; border: 1px solid var(--line); }
+.background-options .field { margin: 15px 0 0; }
+.background-options .field small { color: var(--faint); font-weight: 500; }
+.check-field { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.check-field input { margin-top: 2px; accent-color: var(--ink); }
+.check-field strong, .check-field small { display: block; }
+.check-field strong { font-size: 12px; }
+.check-field small { color: var(--muted); margin-top: 3px; font-size: 10px; line-height: 1.4; }
 .compression input { width: 100%; accent-color: var(--ink); }
 .reference-section { margin-bottom: 23px; }
 .dropzone { min-height: 92px; border: 1px dashed var(--line-dark); border-radius: 10px; display: grid; place-items: center; align-content: center; cursor: pointer; background: #fafaf8; transition: border-color .15s, background .15s; }
@@ -103,7 +112,7 @@ textarea:focus, select:focus, input:focus { border-color: #9eb9f5; box-shadow: 0
 .result-item img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .result-item span { position: absolute; left: 8px; bottom: 8px; padding: 4px 7px; border-radius: 6px; color: white; background: rgba(0,0,0,.65); font-size: 10px; }
 
-.api-section, .library { margin-top: 84px; }
+.api-section, .jobs-section, .library { margin-top: 84px; }
 .section-heading { display: flex; align-items: end; justify-content: space-between; margin-bottom: 22px; }
 .secondary-button { border: 1px solid var(--line-dark); background: white; border-radius: 9px; padding: 9px 13px; cursor: pointer; font-size: 12px; }
 .secondary-button:hover { background: #fafaf8; }
@@ -131,6 +140,17 @@ pre code { color: #d9d9d4; font: 11px/1.75 "Cascadia Code", Consolas, monospace;
 .history-item:hover img { transform: scale(1.025); }
 .history-meta { position: absolute; inset: auto 0 0; padding: 28px 10px 9px; background: linear-gradient(transparent, rgba(0,0,0,.72)); color: white; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .empty-history { color: var(--muted); font-size: 12px; }
+.job-list { padding: 8px 18px; }
+.job-row { min-height: 70px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.job-row:last-child { border-bottom: 0; }
+.job-heading { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.job-heading strong { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-heading code { color: var(--faint); font-size: 9px; }
+.job-row small { display: block; margin-top: 5px; color: var(--faint); font-size: 10px; }
+.job-status { padding: 5px 8px; border-radius: 999px; background: #efefec; color: var(--muted); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.job-status.completed { color: #177251; background: #eaf7f1; }
+.job-status.failed, .job-status.cancelled { color: var(--danger); background: #fff1f0; }
+.job-status.running { color: var(--accent); background: var(--accent-soft); }
 .toast { position: fixed; right: 22px; bottom: 22px; padding: 11px 14px; border-radius: 9px; color: white; background: #171717; box-shadow: 0 10px 30px rgba(0,0,0,.18); opacity: 0; transform: translateY(8px); transition: .2s; pointer-events: none; font-size: 12px; z-index: 30; }
 .toast.visible { opacity: 1; transform: none; }
 
@@ -148,4 +168,6 @@ pre code { color: #d9d9d4; font: 11px/1.75 "Cascadia Code", Consolas, monospace;
   .composer, .result { padding: 18px; }
   .result-grid { grid-template-columns: 1fr; }
   .section-heading { align-items: start; gap: 16px; }
+  .job-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .job-row > .revoke-button { grid-column: 1 / -1; justify-self: start; }
 }

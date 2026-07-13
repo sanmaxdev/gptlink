@@ -28,6 +28,8 @@ Streamable HTTP at `/mcp/` and returns URLs or server-side paths.
 | Reference editing and masks | `gptlink_edit` | Tool contract + provider payload |
 | Source-preserving alternatives | `gptlink_variation` | Tool contract |
 | Recent result recovery | `gptlink_history` | Tool contract + database tests |
+| Durable async creation | `gptlink_job_create` | Tool contract + database tests |
+| Job polling/list/cancel | `gptlink_job_status`, `gptlink_jobs`, `gptlink_job_cancel` | Tool contract + HTTP tests |
 | Local allowed-root enforcement | All file tools | Yes |
 | Remote Bearer authentication | `/mcp/` | Token verifier configuration |
 
@@ -40,6 +42,10 @@ Streamable HTTP at `/mcp/` and returns URLs or server-side paths.
 | `POST /v1/images/edits` | Multipart references and mask | ASGI contract tested |
 | `POST /v1/images/variations` | Variations | GPTLink emulation using reference editing |
 | `POST /v1/responses` | Responses `image_generation` tool | Focused subset |
+| `POST /v1/jobs` | GPTLink durable image job | Supported; strict JSON schema |
+| `GET /v1/jobs`, `GET /v1/jobs/{id}` | Job listing and polling | Supported |
+| `POST /v1/jobs/{id}/cancel` | Cancel queued job | Supported |
+| `Prefer: respond-async` | Queue Images generation/edit/variation | Supported |
 | Image generation SSE | OpenAI-style event stream | Supported |
 
 The API is intentionally image-focused. It does not claim general text,
@@ -59,6 +65,8 @@ embeddings, audio, fine-tuning, assistants, batches, or Files API compatibility.
 | Mask | No | Yes | No | Yes |
 | Partial previews | Yes | Yes | No | HTTP Responses/Images |
 | Hosted URL response | Yes | Yes | Yes | Yes |
+| Durable async job | Yes | Yes | Yes | Yes |
+| Signed webhook | Yes | Yes | Yes | Yes |
 
 ## Verification levels
 

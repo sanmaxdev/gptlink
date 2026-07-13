@@ -95,6 +95,10 @@
               <label class="field"><span>Moderation</span><select id="moderation"><option value="auto">Auto</option><option value="low">Low</option></select></label>
               <label class="field"><span>Previews</span><select id="partialImages"><option value="1">1 partial</option><option value="2">2 partials</option><option value="3">3 partials</option><option value="0">None</option></select></label>
             </div>
+            <div class="background-options">
+              <label class="check-field"><input id="runAsync" type="checkbox" /><span><strong>Run in background</strong><small>Survives restarts and returns a job ID immediately.</small></span></label>
+              <label class="field"><span>Webhook URL <small>optional</small></span><input id="webhookUrl" type="url" inputmode="url" placeholder="https://example.com/gptlink-events" /></label>
+            </div>
           </details>
 
           <div id="formMessage" class="form-message hidden"></div>
@@ -128,6 +132,11 @@
         </div>
       </section>
 
+      <section class="jobs-section">
+        <div class="section-heading"><div><p class="kicker">BACKGROUND WORK</p><h2>Generation jobs</h2></div><button id="refreshJobsButton" class="secondary-button">Refresh jobs</button></div>
+        <div id="jobList" class="job-list panel"></div>
+      </section>
+
       <section class="library">
         <div class="section-heading"><div><p class="kicker">RECENT</p><h2>Image library</h2></div></div>
         <div id="imageHistory" class="image-history"></div>
@@ -137,4 +146,3 @@
     <script src="/app.js"></script>
   </body>
 </html>
-
