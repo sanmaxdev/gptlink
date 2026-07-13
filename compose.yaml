@@ -1,0 +1,40 @@
+name: gptlink
+
+services:
+  gptlink:
+    image: ${GPTLINK_IMAGE:-gptlink:local}
+    build:
+      context: .
+      args:
+        GPTLINK_VERSION: ${GPTLINK_VERSION:-dev}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${GPTLINK_PORT:-8787}:8787"
+    environment:
+      GPTLINK_HOST: 0.0.0.0
+      GPTLINK_PORT: 8787
+      GPTLINK_DATA_DIR: /data
+      CODEX_HOME: /home/gptlink/.codex
+      GPTLINK_PUBLIC_BASE_URL: ${GPTLINK_PUBLIC_BASE_URL:-http://127.0.0.1:8787}
+      GPTLINK_MCP_ALLOWED_ROOTS: /data/images
+    volumes:
+      - gptlink-data:/data
+      - codex-auth:/home/gptlink/.codex
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  gptlink-data:
+  codex-auth:

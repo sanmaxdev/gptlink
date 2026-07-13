@@ -14,6 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from gptlink import __version__
 from gptlink.codex_rpc import CodexAppServer, tolerate_codex_failure
 from gptlink.config import settings
 from gptlink.database import Database
@@ -49,7 +50,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="GPTLink",
-    version="0.4.0",
+    version=__version__,
     description="Local GPT Image 2 API gateway backed by ChatGPT/Codex auth.",
     lifespan=lifespan,
 )

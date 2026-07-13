@@ -1,6 +1,6 @@
 name: gptlink
 manifest_version: 1
-version: 0.4.0
+version: 0.5.0
 description: Self-hosted GPT Image API lifecycle and generation tools using existing Hermes or Codex authentication
 author: sanmaxdev
 license: MIT
@@ -8,4 +8,3 @@ kind: standalone
 provides_tools:
   - gptlink_manage
   - gptlink_generate
-

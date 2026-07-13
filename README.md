@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sanmaxdev/gptlink/actions"><img alt="Tests" src="https://img.shields.io/badge/tests-22%20passing-16a34a?style=flat-square"></a>
+  <a href="https://github.com/sanmaxdev/gptlink/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/sanmaxdev/gptlink/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-2563eb?style=flat-square&logo=python&logoColor=white">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-Streamable%20HTTP-7c3aed?style=flat-square">
   <img alt="OpenAI compatible" src="https://img.shields.io/badge/API-OpenAI%20compatible-0891b2?style=flat-square">
@@ -20,6 +20,7 @@
 <p align="center">
   <a href="#one-command-agent-setup">Quick start</a> ·
   <a href="#supported-agents">Agents</a> ·
+  <a href="#docker-quick-start">Docker</a> ·
   <a href="#remote-vps-mode">VPS</a> ·
   <a href="#api-compatibility">API</a> ·
   <a href="docs/AGENTS.md">Agent guide</a>
@@ -41,13 +42,13 @@ image-generation path.
 
 | One gateway | Full image workflow | Agent-native | Private by default |
 |---|---|---|---|
-| OpenAI-style `/v1` API and MCP from the same service | Generate, edit, combine, mask, vary, resize, stream | Claude Code, Antigravity, Codex, Hermes, and generic MCP | Loopback binding, hashed keys, isolated management routes |
+| OpenAI-style `/v1` API and MCP from the same service | Generate, edit, combine, mask, vary, resize, stream | Claude Code, Antigravity, Codex, OpenCode, Hermes, and generic MCP | Loopback binding, hashed keys, isolated management routes |
 
 ## One-command agent setup
 
 ### Let your agent install it
 
-Paste this instruction into Claude Code, Antigravity, Codex, or another coding
+Paste this instruction into Claude Code, Antigravity, Codex, OpenCode, or another coding
 agent with terminal access:
 
 ```text
@@ -99,8 +100,9 @@ futuristic rainy night. Save the PNG in this project's assets directory.
 | Claude Code | `--agent claude-code --mode local` | `--agent claude-code --mode remote` | MCP config + Claude skill |
 | Antigravity | `--agent antigravity --mode local` | `--agent antigravity --mode remote` | MCP config + Antigravity plugin/skill |
 | Codex | `--agent codex --mode local` | `--agent codex --mode remote` | `codex mcp` config + Codex skill |
+| OpenCode | `--agent opencode --mode local` | `--agent opencode --mode remote` | Native MCP config + OpenCode skill |
 | Hermes Agent | `hermes plugins install sanmaxdev/gptlink --enable` | Same-VPS plugin recommended | Explicit plugin + scanner-safe skill |
-| Cursor, Windsurf, OpenCode, Goose, others | Use `integrations/generic/stdio.json` | Use `integrations/generic/remote.json` | Standard MCP |
+| Cursor, Windsurf, Goose, others | Use `integrations/generic/stdio.json` | Use `integrations/generic/remote.json` | Standard MCP |
 
 Install only the active agent:
 
@@ -108,11 +110,12 @@ Install only the active agent:
 python3 scripts/bootstrap-agent.py --agent claude-code --scope user --mode local
 python3 scripts/bootstrap-agent.py --agent antigravity --scope user --mode local
 python3 scripts/bootstrap-agent.py --agent codex --scope user --mode local
+python3 scripts/bootstrap-agent.py --agent opencode --scope user --mode local
 ```
 
-For project-only Claude Code or Antigravity configuration, run inside the
-target project with `--scope project`. Codex registration currently uses user
-scope.
+For project-only Claude Code, Antigravity, or OpenCode configuration, run inside
+the target project with `--scope project`. Codex registration currently uses
+user scope.
 
 ### Hermes autonomous setup
 
@@ -140,8 +143,9 @@ internal gateway key, and native image delivery. See [the Hermes guide](docs/HER
 Claude Code ─┐
 Antigravity ─┤
 Codex ───────┼── MCP (stdio or HTTPS) ── GPTLink ── authenticated Codex session
-Hermes ──────┤                              │
-Other agents ┘                              └── saved images + history
+OpenCode ────┤                              │
+Hermes ──────┤                              └── saved images + history
+Other agents ┘
 
 Applications ── OpenAI-compatible /v1 API ─┘
 ```
@@ -175,6 +179,25 @@ images into the agent's context.
 | `gptlink_edit` | Edit or combine up to 16 references, optionally with a mask |
 | `gptlink_variation` | Produce alternatives that preserve source identity |
 | `gptlink_history` | Retrieve recent outputs without base64 context bloat |
+
+## Docker quick start
+
+Docker provides the most reproducible self-hosted installation and keeps the
+database, generated images, and Codex authentication in separate persistent
+volumes.
+
+```bash
+git clone https://github.com/sanmaxdev/gptlink.git
+cd gptlink
+docker compose build
+docker compose run --rm gptlink codex login --device-auth
+docker compose up -d
+docker compose exec gptlink python manage.py create-key My-Agent
+```
+
+The service is published only on `127.0.0.1:8787` by default. See the complete
+[Docker guide](docs/DOCKER.md) for existing-auth reuse, updates, additional
+reference mounts, and hosted HTTPS deployment.
 
 ## Remote VPS mode
 
@@ -283,9 +306,13 @@ GPTLink agent key.
 
 | Guide | Use it for |
 |---|---|
-| [Agent installation](docs/AGENTS.md) | Claude Code, Antigravity, Codex, generic MCP, autonomous agent flow |
+| [Agent installation](docs/AGENTS.md) | Claude Code, Antigravity, Codex, OpenCode, generic MCP, autonomous agent flow |
 | [Hermes plugin](docs/HERMES.md) | Fully managed Hermes installation and authentication reuse |
+| [Docker deployment](docs/DOCKER.md) | Persistent container installation and safe updates |
 | [Ubuntu VPS](docs/VPS.md) | systemd, Caddy, DNS, HTTPS, firewall, updates, backups |
+| [Compatibility matrix](docs/COMPATIBILITY.md) | Auditable client, endpoint, and feature support |
+| [OpenCode local template](integrations/opencode/local.json) | Manual local OpenCode MCP configuration |
+| [OpenCode remote template](integrations/opencode/remote.json) | Manual hosted OpenCode MCP configuration |
 | [Generic stdio template](integrations/generic/stdio.json) | Local MCP clients |
 | [Generic remote template](integrations/generic/remote.json) | Hosted MCP clients |
 
@@ -300,6 +327,10 @@ python3 -m venv .venv
 
 Windows equivalents are provided by `Setup-GPTLink.ps1` and
 `Launch-GPTLink.cmd`.
+
+Tagged releases publish `.zip` and `.tar.gz` source bundles plus versioned and
+`latest` container images at `ghcr.io/sanmaxdev/gptlink`. CI tests Python 3.11
+and 3.12 and builds the container on every pull request.
 
 ---
 

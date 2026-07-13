@@ -28,15 +28,21 @@ Use the agent that is currently running:
 | Claude Code | `claude-code` |
 | Google Antigravity | `antigravity` |
 | Codex | `codex` |
+| OpenCode | `opencode` |
 | Unknown or several installed agents | `all` |
 | Hermes | Use the Hermes plugin procedure below |
 
-Choose `user` scope unless the user explicitly wants a project-only Claude Code
-or Antigravity integration. Codex uses user scope.
+Choose `user` scope unless the user explicitly wants a project-only Claude Code,
+Antigravity, or OpenCode integration. Codex uses user scope.
 
 Choose local mode when the agent and Codex authentication live on the same
 machine. Choose remote mode when an existing GPTLink service is hosted on a
 different server.
+
+Choose the container procedure in [DOCKER.md](DOCKER.md) when the user asks for
+Docker, Compose, portable isolation, or container deployment. A container hosts
+the gateway; agents on the host or another machine connect to it through remote
+MCP with a dedicated GPTLink key.
 
 ### 2. Install or update the repository
 
@@ -114,6 +120,7 @@ Agent MCP configuration normally loads at session start:
 - Claude Code: restart or inspect `/mcp`.
 - Antigravity: restart, open `/mcp`, and reload the server.
 - Codex: restart and run `codex mcp get gptlink` if diagnosis is needed.
+- OpenCode: restart, then inspect the MCP tools or run `opencode mcp list`.
 
 Once the tools are available, call `gptlink_status`. Completion requires
 `ready: true`. Do not consume an image allocation for a smoke test unless the
@@ -141,6 +148,7 @@ Install one:
 python3 scripts/bootstrap-agent.py --agent claude-code --scope user --mode local
 python3 scripts/bootstrap-agent.py --agent antigravity --scope user --mode local
 python3 scripts/bootstrap-agent.py --agent codex --scope user --mode local
+python3 scripts/bootstrap-agent.py --agent opencode --scope user --mode local
 ```
 
 Limit file access to explicit roots:
@@ -190,6 +198,14 @@ Requirements:
 
 Remote agents cannot use client-local reference paths. Pass an HTTP(S) URL or
 data URL, or select local stdio mode.
+
+### Docker-hosted remote service
+
+For a container deployment, follow [DOCKER.md](DOCKER.md). Complete Codex device
+login inside the container, start the service, create a distinct gateway key for
+the active agent, and then run the normal remote bootstrap on the agent machine.
+Keep the published container port loopback-only and place HTTPS in front of it
+for any non-local client.
 
 ## Agent-specific details
 
@@ -252,6 +268,61 @@ codex mcp add gptlink \
   --url https://images.example.com/mcp/ \
   --bearer-token-env-var GPTLINK_API_KEY
 ```
+
+### OpenCode
+
+User configuration is merged into `~/.config/opencode/opencode.json`, and the
+skill is installed under `~/.config/opencode/skills/gptlink-images`. Project
+scope uses `opencode.json` and `.opencode/skills/gptlink-images` in the selected
+workspace.
+
+Manual local fallback:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "gptlink": {
+      "type": "local",
+      "command": [
+        "/path/to/gptlink/.venv/bin/python",
+        "-m",
+        "gptlink.mcp_server",
+        "--transport",
+        "stdio"
+      ],
+      "enabled": true,
+      "environment": {
+        "PYTHONPATH": "/path/to/gptlink"
+      }
+    }
+  }
+}
+```
+
+Manual remote fallback:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "gptlink": {
+      "type": "remote",
+      "url": "https://images.example.com/mcp/",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer gptlink_your_key"
+      }
+    }
+  }
+}
+```
+
+OpenCode configuration uses `mcp`, `type`, `command`/`url`, and `environment`.
+Remote GPTLink entries set `oauth: false` because they use a gateway Bearer key,
+not MCP OAuth discovery. Do not reuse the `mcpServers`, `serverUrl`, or `env`
+fields used by other clients.
 
 ### Hermes
 

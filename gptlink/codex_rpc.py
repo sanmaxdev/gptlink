@@ -6,6 +6,8 @@ import logging
 from collections.abc import Awaitable
 from typing import Any
 
+from gptlink import __version__
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,7 +45,7 @@ class CodexAppServer:
                 "clientInfo": {
                     "name": "gptlink",
                     "title": "GPTLink Image Gateway",
-                    "version": "0.4.0",
+                    "version": __version__,
                 }
             },
         )

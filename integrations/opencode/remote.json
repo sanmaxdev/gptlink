@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "gptlink": {
+      "type": "remote",
+      "url": "https://images.example.com/mcp/",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer gptlink_replace_me"
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "gptlink": {
+      "type": "local",
+      "command": [
+        "/opt/gptlink/.venv/bin/python",
+        "-m",
+        "gptlink.mcp_server",
+        "--transport",
+        "stdio"
+      ],
+      "enabled": true,
+      "environment": {
+        "PYTHONPATH": "/opt/gptlink",
+        "GPTLINK_DATA_DIR": "/var/lib/gptlink",
+        "GPTLINK_MCP_ALLOWED_ROOTS": "/var/lib/gptlink/images"
+      }
+    }
+  }
+}

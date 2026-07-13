@@ -29,7 +29,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--agent",
-        choices=["claude-code", "antigravity", "codex", "all"],
+        choices=["claude-code", "antigravity", "codex", "opencode", "all"],
         default="all",
     )
     parser.add_argument("--scope", choices=["user", "project"], default="user")

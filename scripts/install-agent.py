@@ -14,7 +14,9 @@ ROOT = Path(__file__).resolve().parent.parent
 SKILL_SOURCE = ROOT / "integrations" / "shared" / "gptlink-images"
 
 
-def merge_server(path: Path, server: dict[str, Any]) -> None:
+def merge_named_server(
+    path: Path, section_name: str, server: dict[str, Any]
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -22,15 +24,19 @@ def merge_server(path: Path, server: dict[str, Any]) -> None:
             value = {}
     except (OSError, json.JSONDecodeError):
         value = {}
-    servers = value.setdefault("mcpServers", {})
+    servers = value.setdefault(section_name, {})
     if not isinstance(servers, dict):
-        raise RuntimeError(f"mcpServers is not an object in {path}")
+        raise RuntimeError(f"{section_name} is not an object in {path}")
     servers["gptlink"] = server
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
     try:
         path.chmod(0o600)
     except OSError:
         pass
+
+
+def merge_server(path: Path, server: dict[str, Any]) -> None:
+    merge_named_server(path, "mcpServers", server)
 
 
 def copy_skill(destination: Path) -> None:
@@ -122,6 +128,36 @@ def install_antigravity(server: dict[str, Any], scope: str, workspace: Path) -> 
     return config
 
 
+def install_opencode(server: dict[str, Any], scope: str, workspace: Path) -> Path:
+    if scope == "project":
+        config = workspace / "opencode.json"
+        skill = workspace / ".opencode" / "skills" / "gptlink-images"
+    else:
+        config = Path.home() / ".config" / "opencode" / "opencode.json"
+        skill = Path.home() / ".config" / "opencode" / "skills" / "gptlink-images"
+
+    if "serverUrl" in server:
+        opencode_server = {
+            "type": "remote",
+            "url": server["serverUrl"],
+            "enabled": True,
+            "oauth": False,
+            "headers": server["headers"],
+        }
+    else:
+        environment = dict(server.get("env", {}))
+        environment["PYTHONPATH"] = str(ROOT)
+        opencode_server = {
+            "type": "local",
+            "command": [server["command"], *server["args"]],
+            "enabled": True,
+            "environment": environment,
+        }
+    merge_named_server(config, "mcp", opencode_server)
+    copy_skill(skill)
+    return config
+
+
 def run_checked(command: list[str], *, cwd: Path | None = None) -> None:
     result = subprocess.run(command, cwd=cwd, text=True, capture_output=True)
     if result.returncode:
@@ -161,7 +197,9 @@ def main() -> None:
         description="Install GPTLink MCP and its image skill into coding agents"
     )
     parser.add_argument(
-        "--agent", choices=["claude-code", "antigravity", "codex", "all"], default="all"
+        "--agent",
+        choices=["claude-code", "antigravity", "codex", "opencode", "all"],
+        default="all",
     )
     parser.add_argument("--scope", choices=["user", "project"], default="user")
     parser.add_argument("--mode", choices=["local", "remote"], default="local")
@@ -183,7 +221,9 @@ def main() -> None:
         server = local_server(roots)
 
     agents = (
-        ["claude-code", "antigravity", "codex"] if args.agent == "all" else [args.agent]
+        ["claude-code", "antigravity", "codex", "opencode"]
+        if args.agent == "all"
+        else [args.agent]
     )
     installed: dict[str, str] = {}
     failures: dict[str, str] = {}
@@ -193,8 +233,10 @@ def main() -> None:
                 installed[agent] = str(install_claude(server, args.scope, workspace))
             elif agent == "antigravity":
                 installed[agent] = str(install_antigravity(server, args.scope, workspace))
-            else:
+            elif agent == "codex":
                 installed[agent] = install_codex(server, args.scope, workspace, args.api_key)
+            else:
+                installed[agent] = str(install_opencode(server, args.scope, workspace))
         except RuntimeError as exc:
             failures[agent] = str(exc)
 

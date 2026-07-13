@@ -1,0 +1,17 @@
+.git
+.github
+.venv
+.pytest_cache
+__pycache__
+*.py[cod]
+.env
+data
+server.pid
+docs
+integrations
+skills
+tests
+deploy
+hermes_plugin
+Launch-GPTLink.cmd
+Setup-GPTLink.ps1
