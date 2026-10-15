@@ -126,7 +126,9 @@ class ImageJobRequest(StrictModel):
 
 
 class ResponsesImageRequest(StrictModel):
-    model: str = "gpt-5.5"
+    # Accepted for OpenAI SDK compatibility only. The Codex chat model is chosen
+    # by the provider (see CodexImageProvider.chat_model_candidates).
+    model: str | None = None
     input: str | list[dict[str, Any]]
     tools: list[dict[str, Any]] = Field(min_length=1)
     tool_choice: dict[str, Any] | str | None = None

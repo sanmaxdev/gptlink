@@ -4,6 +4,7 @@ import base64
 import json
 import math
 import mimetypes
+import os
 import re
 import time
 import uuid
@@ -13,8 +14,18 @@ from typing import Any, Iterable, Iterator
 
 import httpx
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    tomllib = None  # type: ignore[assignment]
+
 CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
-CODEX_CHAT_MODEL = "gpt-5.5"
+# Codex only runs the image_generation tool through a chat model that the
+# signed-in ChatGPT plan supports, and that set changes as models retire.
+# The chat model is therefore resolved at runtime (see chat_model_candidates)
+# instead of being pinned; this is only the last-resort default.
+DEFAULT_CODEX_CHAT_MODEL = "gpt-6.1-sol"
+CODEX_CHAT_MODEL_ENV = "GPTLINK_CODEX_MODEL"
 IMAGE_MODEL = "gpt-image-2"
 MIN_PIXELS = 655_360
 MAX_PIXELS = 8_294_400
@@ -44,6 +55,7 @@ class GeneratedImage:
     revised_prompt: str | None = None
     usage: dict[str, Any] | None = None
     partial_images: list[str] = field(default_factory=list)
+    chat_model: str | None = None
 
 
 class CodexImageProvider:
@@ -51,6 +63,55 @@ class CodexImageProvider:
         self.codex_home = codex_home
         self.hermes_home = hermes_home or Path.home() / ".hermes"
         self.image_dir = image_dir
+        self._working_chat_model: str | None = None
+
+    def chat_model_candidates(self) -> list[str]:
+        """Chat models to route image generation through, best first.
+
+        A model that already succeeded in this process comes first, then the
+        GPTLINK_CODEX_MODEL override (comma-separated), then the model the Codex
+        CLI is configured with, then DEFAULT_CODEX_CHAT_MODEL.
+        """
+        candidates: list[str] = []
+        if self._working_chat_model:
+            candidates.append(self._working_chat_model)
+        override = os.environ.get(CODEX_CHAT_MODEL_ENV, "")
+        candidates.extend(part.strip() for part in override.split(",") if part.strip())
+        configured = self._codex_configured_model()
+        if configured:
+            candidates.append(configured)
+        candidates.append(DEFAULT_CODEX_CHAT_MODEL)
+        return list(dict.fromkeys(candidates))
+
+    def _codex_configured_model(self) -> str | None:
+        """The `model` from Codex's config.toml, honouring an active profile."""
+        if tomllib is None:
+            return None
+        try:
+            config = tomllib.loads((self.codex_home / "config.toml").read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+            return None
+        profile_name = config.get("profile")
+        profiles = config.get("profiles")
+        if isinstance(profile_name, str) and isinstance(profiles, dict):
+            profile = profiles.get(profile_name)
+            if isinstance(profile, dict):
+                model = profile.get("model")
+                if isinstance(model, str) and model.strip():
+                    return model.strip()
+        model = config.get("model")
+        return model.strip() if isinstance(model, str) and model.strip() else None
+
+    @staticmethod
+    def is_unsupported_chat_model_error(status_code: int, body: str) -> bool:
+        """True when Codex rejected the chat model itself, so another may work."""
+        if status_code not in {400, 404}:
+            return False
+        text = body.lower()
+        return "model" in text and any(
+            marker in text
+            for marker in ("not supported", "unsupported", "does not exist", "not found", "model_not_found")
+        )
 
     def generate(
         self,
@@ -108,48 +169,62 @@ class CodexImageProvider:
         access_token = self._read_access_token()
         resolved_quality = self.resolve_quality(model, quality)
         resolved_size = self.validate_size(size)
-        payload = self.build_payload(
-            prompt=prompt,
-            size=resolved_size,
-            quality=resolved_quality,
-            output_format=output_format,
-            background=background,
-            output_compression=output_compression,
-            moderation=moderation,
-            partial_images=partial_images,
-            input_images=input_images or [],
-            input_image_mask=input_image_mask,
-            action=action,
-        )
         timeout = httpx.Timeout(300, connect=30, read=300, write=30, pool=30)
         final_b64: str | None = None
         revised_prompt: str | None = None
         usage: dict[str, Any] | None = None
         partials: list[str] = []
+        candidates = self.chat_model_candidates()
+        rejected: list[str] = []
+        chat_model = candidates[0]
         with httpx.Client(headers=self.build_headers(access_token), timeout=timeout) as client:
-            with client.stream("POST", f"{CODEX_BASE_URL}/responses", json=payload) as response:
-                try:
-                    response.raise_for_status()
-                except httpx.HTTPStatusError as exc:
-                    response.read()
-                    message = response.text[:800]
-                    raise RuntimeError(
-                        f"Codex image request failed ({response.status_code}): {message}"
-                    ) from exc
-                for event in self.iter_sse_json(response.iter_lines()):
-                    partial_b64 = self.extract_partial_image_b64(event)
-                    if partial_b64 and (not partials or partials[-1] != partial_b64):
-                        partials.append(partial_b64)
-                        yield {
-                            "type": "partial",
-                            "index": len(partials) - 1,
-                            "base64_data": partial_b64,
-                        }
-                    candidate = self.extract_image_b64(event)
-                    if candidate:
-                        final_b64 = candidate
-                    revised_prompt = self.extract_revised_prompt(event) or revised_prompt
-                    usage = self.extract_usage(event) or usage
+            for chat_model in candidates:
+                payload = self.build_payload(
+                    prompt=prompt,
+                    size=resolved_size,
+                    quality=resolved_quality,
+                    output_format=output_format,
+                    background=background,
+                    output_compression=output_compression,
+                    moderation=moderation,
+                    partial_images=partial_images,
+                    input_images=input_images or [],
+                    input_image_mask=input_image_mask,
+                    action=action,
+                    chat_model=chat_model,
+                )
+                with client.stream("POST", f"{CODEX_BASE_URL}/responses", json=payload) as response:
+                    if response.is_error:
+                        response.read()
+                        message = response.text[:800]
+                        if self.is_unsupported_chat_model_error(response.status_code, message):
+                            rejected.append(f"{chat_model}: {message}")
+                            continue
+                        raise RuntimeError(
+                            f"Codex image request failed ({response.status_code}): {message}"
+                        )
+                    self._working_chat_model = chat_model
+                    for event in self.iter_sse_json(response.iter_lines()):
+                        partial_b64 = self.extract_partial_image_b64(event)
+                        if partial_b64 and (not partials or partials[-1] != partial_b64):
+                            partials.append(partial_b64)
+                            yield {
+                                "type": "partial",
+                                "index": len(partials) - 1,
+                                "base64_data": partial_b64,
+                            }
+                        candidate = self.extract_image_b64(event)
+                        if candidate:
+                            final_b64 = candidate
+                        revised_prompt = self.extract_revised_prompt(event) or revised_prompt
+                        usage = self.extract_usage(event) or usage
+                break
+            else:
+                raise RuntimeError(
+                    "Codex rejected every chat model tried for image generation ("
+                    + "; ".join(rejected)
+                    + f"). Set {CODEX_CHAT_MODEL_ENV} to a model your ChatGPT plan can use in Codex."
+                )
         if not final_b64:
             raise RuntimeError("Codex completed without returning an image")
         image_id = f"img_{uuid.uuid4().hex}"
@@ -168,6 +243,7 @@ class CodexImageProvider:
             revised_prompt=revised_prompt,
             usage=usage,
             partial_images=partials,
+            chat_model=chat_model,
         )
         yield {"type": "completed", "image": generated}
 
@@ -328,6 +404,7 @@ class CodexImageProvider:
         input_images: list[str],
         input_image_mask: str | None,
         action: str | None,
+        chat_model: str = DEFAULT_CODEX_CHAT_MODEL,
     ) -> dict[str, Any]:
         CodexImageProvider.validate_size(size)
         if output_format not in SUPPORTED_FORMATS:
@@ -366,7 +443,7 @@ class CodexImageProvider:
         if input_image_mask:
             tool["input_image_mask"] = {"image_url": input_image_mask}
         return {
-            "model": CODEX_CHAT_MODEL,
+            "model": chat_model,
             "store": False,
             "instructions": (
                 "Fulfill the user's image request by calling the image_generation "

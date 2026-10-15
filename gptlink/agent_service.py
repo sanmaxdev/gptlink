@@ -47,6 +47,7 @@ class AgentImageService:
             "auth_source": auth_source,
             "account": self.provider.auth_summary() if auth_source else None,
             "models": list(IMAGE_MODELS),
+            "codex_chat_models": self.provider.chat_model_candidates(),
             "active_api_keys": len(active_keys),
             "output_directory": str(self.settings.image_dir),
             "message": (
