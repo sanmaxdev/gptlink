@@ -642,7 +642,7 @@ async def create_response(payload: ResponsesImageRequest, request: Request):
         "object": "response",
         "created_at": int(time.time()),
         "status": "completed",
-        "model": payload.model,
+        "model": generated.chat_model or payload.model,
         "output": [{
             "id": f"ig_{generated.id[4:]}", "type": "image_generation_call",
             "status": "completed", "result": generated.base64_data,

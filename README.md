@@ -153,6 +153,21 @@ Applications ── OpenAI-compatible /v1 API ─┘
 The MCP layer returns compact paths and URLs instead of injecting large base64
 images into the agent's context.
 
+### Codex chat model
+
+Codex generates images through a chat model, and only models your ChatGPT plan
+supports in Codex are accepted. GPTLink chooses that model at runtime, in this
+order:
+
+1. `GPTLINK_CODEX_MODEL`, if set (comma-separated for several candidates)
+2. the `model` in your Codex CLI `config.toml` (the active `profile` wins)
+3. the built-in default
+
+If Codex rejects a model as unsupported, GPTLink tries the next candidate and
+keeps using the first one that works. `gptlink_status` lists the candidates.
+When every candidate is rejected, set `GPTLINK_CODEX_MODEL` to a model that
+works in your Codex CLI.
+
 ## Image capabilities
 
 - Text-to-image generation
